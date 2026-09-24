@@ -1,0 +1,144 @@
+name: Verify Windows preview asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Prerelease tag to verify
+        required: true
+        default: preview-1
+        type: string
+      expected_sha256:
+        description: Expected SHA-256 of JSONDictionaryEditor-Windows-x64.zip
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      # Verify the actual release attachment; no checkout or rebuild is involved.
+      - name: Download, verify, and run CLI diagnostics
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_PROMPT_DISABLED: '1'
+          PREVIEW_TAG: ${{ inputs.tag }}
+          EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          $assetName = 'JSONDictionaryEditor-Windows-x64.zip'
+          $scratch = Join-Path $env:RUNNER_TEMP ('json-dictionary-preview-' + [guid]::NewGuid().ToString('N'))
+          $summary = [System.Collections.Generic.List[string]]::new()
+          $summary.Add('# Windows x64 preview CLI verification')
+          $summary.Add('')
+          $summary.Add("Repository: $env:GITHUB_REPOSITORY")
+          $summary.Add("Run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID (attempt $env:GITHUB_RUN_ATTEMPT)")
+          $summary.Add('')
+          $summary.Add('This job checks the released x64 executable and CLI diagnostics only. It does not validate ARM64, GUI appearance, the 1.0.1 splitter fix, IME, DPI, or complete GUI acceptance.')
+
+          try {
+            # Keep all dispatch inputs in environment variables, outside script syntax.
+            if ($env:PREVIEW_TAG -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+              throw 'Tag must be 1-128 ASCII letters, digits, dots, underscores, or hyphens, starting with a letter or digit.'
+            }
+            if ($env:EXPECTED_SHA256 -cnotmatch '^[A-Fa-f0-9]{64}$') {
+              throw 'expected_sha256 must contain exactly 64 hexadecimal characters.'
+            }
+            $expectedHash = $env:EXPECTED_SHA256.ToLowerInvariant()
+            $os = Get-CimInstance -ClassName Win32_OperatingSystem
+            $summary.Add('')
+            $summary.Add("Windows: $($os.Caption); version $($os.Version); build $($os.BuildNumber); $($os.OSArchitecture)")
+            $summary.Add("Runner: $env:RUNNER_OS / $env:RUNNER_ARCH; image $env:ImageOS / $env:ImageVersion")
+            $summary.Add("PowerShell: $($PSVersionTable.PSVersion)")
+            $summary.Add("Tag: $env:PREVIEW_TAG")
+            $summary.Add("Expected ZIP SHA-256: $expectedHash")
+            New-Item -ItemType Directory -Path $scratch | Out-Null
+
+            $releaseJson = & gh release view $env:PREVIEW_TAG --repo $env:GITHUB_REPOSITORY --json tagName,isPrerelease,isDraft,assets
+            if ($LASTEXITCODE -ne 0) { throw 'Could not read the prerelease from this repository.' }
+            $release = $releaseJson | ConvertFrom-Json
+            if ($release.tagName -cne $env:PREVIEW_TAG -or -not $release.isPrerelease -or $release.isDraft) {
+              throw 'The selected release must be a published prerelease with the requested tag (the repository may remain private).'
+            }
+            $matchingAssets = @($release.assets | Where-Object { $_.name -ceq $assetName })
+            if ($matchingAssets.Count -ne 1) { throw "Expected exactly one release asset named $assetName." }
+            & gh release download $env:PREVIEW_TAG --repo $env:GITHUB_REPOSITORY --pattern $assetName --dir $scratch
+            if ($LASTEXITCODE -ne 0) { throw 'Release asset download failed.' }
+            $archive = Join-Path $scratch $assetName
+            $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            $summary.Add("Asset: $assetName")
+            $summary.Add("Downloaded ZIP SHA-256: $actualHash")
+            if ($actualHash -cne $expectedHash) { throw 'ZIP SHA-256 does not match the independently supplied expected value.' }
+
+            $package = Join-Path $scratch 'package'
+            Expand-Archive -LiteralPath $archive -DestinationPath $package
+            foreach ($required in @('JSONDictionaryEditor.exe', 'SampleDictionary.json', 'LICENSE', 'SOURCE.json')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $package $required) -PathType Leaf)) {
+                throw "Missing required package-root file: $required"
+              }
+            }
+            $exe = Join-Path $package 'JSONDictionaryEditor.exe'
+            $exeHash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+            $source = Get-Content -LiteralPath (Join-Path $package 'SOURCE.json') -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($source.source_commit -cnotmatch '^[a-fA-F0-9]{40}$' -or
+                $source.tag -cne $env:PREVIEW_TAG -or
+                $source.app_version -cne '1.0.1' -or
+                $source.architecture -cne 'x64') {
+              throw 'SOURCE.json must identify a full source commit, the requested tag, app version 1.0.1, and architecture x64.'
+            }
+            $tagCommit = & gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:PREVIEW_TAG" --jq '.sha'
+            if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the release tag to a source commit.' }
+            if ($tagCommit -ine $source.source_commit) { throw 'SOURCE.json source_commit does not match the release tag commit.' }
+            $summary.Add("EXE SHA-256: $exeHash")
+            $summary.Add("Source commit: $($source.source_commit)")
+            $summary.Add("Package metadata: tag=$($source.tag); app_version=$($source.app_version); architecture=$($source.architecture)")
+
+            function Invoke-Diagnostic {
+              param([string]$Name, [string[]]$Arguments, [int]$ExpectedExit, [string]$ExpectedOutput)
+              $stdoutPath = Join-Path $scratch "$Name.stdout.txt"
+              $stderrPath = Join-Path $scratch "$Name.stderr.txt"
+              $process = Start-Process -FilePath $exe -ArgumentList $Arguments -WorkingDirectory $package -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+              $stdout = [System.IO.File]::ReadAllText($stdoutPath, [System.Text.Encoding]::UTF8).TrimEnd()
+              $stderr = [System.IO.File]::ReadAllText($stderrPath, [System.Text.Encoding]::UTF8).TrimEnd()
+              $summary.Add('')
+              $summary.Add("## $Name — exit $($process.ExitCode), expected $ExpectedExit")
+              $summary.Add('```text')
+              $summary.Add("stdout: $stdout")
+              $summary.Add("stderr: $stderr")
+              $summary.Add('```')
+              Write-Output "$Name — exit $($process.ExitCode), expected $ExpectedExit"
+              Write-Output "stdout: $stdout"
+              Write-Output "stderr: $stderr"
+              if ($process.ExitCode -ne $ExpectedExit) { throw "$Name returned an unexpected exit code." }
+              if (("$stdout`n$stderr") -notmatch $ExpectedOutput) { throw "$Name did not emit the expected diagnostic marker." }
+            }
+
+            $validPath = Join-Path $scratch 'valid.json'
+            $invalidPath = Join-Path $scratch 'duplicate-key.json'
+            $utf8 = [System.Text.UTF8Encoding]::new($false)
+            [System.IO.File]::WriteAllText($validPath, '{"text":"中文🙂","number":1e3,"array":[true,null,{"key":"value"}]}', $utf8)
+            [System.IO.File]::WriteAllText($invalidPath, '{"duplicate":1,"duplicate":2}', $utf8)
+            Invoke-Diagnostic -Name 'version' -Arguments @('--version') -ExpectedExit 0 -ExpectedOutput '^JSON Dictionary Editor for Windows 1\.0\.1\s*$'
+            # Includes Win32 atomic file round-trip and stale-identity/overwrite protection.
+            Invoke-Diagnostic -Name 'self-test' -Arguments @('--self-test') -ExpectedExit 0 -ExpectedOutput 'SELF_TEST_OK:'
+            Invoke-Diagnostic -Name 'valid-json' -Arguments @('--validate-json', "`"$validPath`"") -ExpectedExit 0 -ExpectedOutput 'VALID_JSON_DICTIONARY:'
+            Invoke-Diagnostic -Name 'duplicate-key' -Arguments @('--validate-json', "`"$invalidPath`"") -ExpectedExit 1 -ExpectedOutput 'INVALID_JSON_DICTIONARY:'
+            Invoke-Diagnostic -Name 'missing-argument' -Arguments @('--validate-json') -ExpectedExit 2 -ExpectedOutput 'usage:'
+            $summary.Add('')
+            $summary.Add('Result: PASS — all five CLI diagnostics produced the expected exit codes and messages.')
+          } catch {
+            $summary.Add('')
+            $summary.Add("Result: FAIL — $($_.Exception.Message)")
+            throw
+          } finally {
+            $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            if (Test-Path -LiteralPath $scratch) {
+              Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }

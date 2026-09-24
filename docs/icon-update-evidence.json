@@ -1,0 +1,26 @@
+{
+  "phase": "windows-icon-replacement",
+  "date": "2026-09-20",
+  "historical": true,
+  "scope": "Previous local icon/resource check; current preview binaries require fresh checks. Original reports retained in local audit.",
+  "ico_sha256": "e635dbe42f45fb5321707439e05db95aae9c02f11c595ee73dd9873353cccae9",
+  "sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    256
+  ],
+  "results": {
+    "png_rgba_crc_alpha": true,
+    "repeat_generation_identical": true,
+    "embedded_icons_matched_x64_arm64": true
+  },
+  "not_verified": [
+    "Windows real-device icon appearance",
+    "Windows splitter visual confirmation",
+    "full GUI acceptance"
+  ]
+}

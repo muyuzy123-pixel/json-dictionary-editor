@@ -1,0 +1,46 @@
+JSON Dictionary Editor — third-party notices
+
+The project-owned source and resources are licensed under the root LICENSE.
+That MIT license does not relicense the third-party components below.
+
+Windows preview build
+---------------------
+Toolchain: LLVM-MinGW 20260616 UCRT, LLVM/Clang 22.1.8.
+Upstream: https://github.com/mstorsjo/llvm-mingw/releases/tag/20260616
+Build-tool archive SHA-256:
+2cab02a2e964bd4aae981150a45985d07c657cfa8d244959eb9e2dcc5eedd7b1
+
+The static Windows build uses LLVM libc++ (including libc++abi members),
+libunwind, compiler-rt builtins, and the MinGW-w64 startup/runtime libraries.
+Their code can be included in the executable even though the build tools
+and SDK are not included in the download.
+
+- LLVM components: see licenses/LLVM-LICENSE.TXT, retained verbatim from the
+  identified toolchain. It includes Apache-2.0 with LLVM Exceptions and the
+  legacy LLVM license text supplied by that distribution.
+- MinGW-w64 runtime: see licenses/COPYING.MinGW-w64-runtime.txt, retained in
+  full from the same toolchain. Its component notices are not replaced by
+  the project's MIT license. The x64 and ARM64 copies have identical bytes.
+
+The preview packaging script checks the final link map and refuses a build
+that also includes winpthreads or winstorecompat until the corresponding
+additional notices are reviewed and included. The mere presence of those
+libraries in a toolchain does not mean that they are linked into this app.
+The build also imports Windows/UCRT system DLLs; those system DLLs are not
+copied into this package. The tools themselves, SDK headers and libraries,
+and their separate tool-only licenses are not redistributed here.
+
+macOS preview build
+-------------------
+The app uses the operating system's SwiftUI, AppKit and Foundation APIs.
+Apple frameworks, SDKs and font software are not copied into the preview.
+These system components remain subject to their own terms; this project's
+MIT license covers only project-owned material. The macOS icon generator
+uses a system font through AppKit; that font is not licensed by this project.
+
+Scope
+-----
+The supplied license files preserve the upstream notices. Inclusion of a
+notice does not grant rights to third-party trademarks or imply endorsement.
+Build-input, executable and package hashes are recorded separately; a build
+tool archive hash is not a signature or a guarantee about every component.

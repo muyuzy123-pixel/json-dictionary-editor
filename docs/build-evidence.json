@@ -1,0 +1,19 @@
+{
+  "phase": "initial-local-candidate",
+  "date": "2026-09-20",
+  "historical": true,
+  "scope": "Before current public attribution and preview packaging; original unredacted records retained in local audit.",
+  "results": {
+    "macos_unsigned_universal_build": true,
+    "macos_x86_64_core_test": true,
+    "windows_cross_x64_arm64": true,
+    "cpp_assertions": 82,
+    "cpp_sanitized_assertions": 82,
+    "shared_fixture_checks": 70
+  },
+  "not_verified": [
+    "full GUI acceptance",
+    "native Windows build",
+    "Windows splitter visual confirmation"
+  ]
+}
