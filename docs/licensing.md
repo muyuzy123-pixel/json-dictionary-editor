@@ -22,7 +22,7 @@ Windows 图标直接沿用项目几何设计，只将系统字体花括号改成
 
 Mac 依赖系统提供的 SwiftUI、AppKit、Foundation 和 Swift 运行环境；本仓库不导入 Apple SDK、系统框架或字体文件。
 
-Windows 使用 LLVM-MinGW 20260616 的静态运行库。预览分发按最终链接映射核对 libc++（包含 libc++abi 成员）、libunwind、compiler-rt、MinGW 启动/运行库及系统导入库；不能以没有额外 DLL 推断没有第三方代码。
+Windows 使用 LLVM-MinGW 20260616 的静态运行库。预览分发按最终链接映射和实际 Loaded 归档记录核对 libc++（包含 libc++abi 成员）、libunwind、compiler-rt、MinGW 启动/运行库及系统导入库；不能以没有额外 DLL 推断没有第三方代码。
 
 完整许可文本与组件索引见 [THIRD_PARTY_NOTICES.txt](../THIRD_PARTY_NOTICES.txt)。LLVM 与 MinGW 声明原样保留；是否需要其他组件声明由实际链接内容决定，不将工具链中的工具许可误套到应用，也不将第三方内容标为项目 MIT。
 

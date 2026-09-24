@@ -82,16 +82,24 @@ for arch in ('x64', 'arm64'):
     exe = dist / exe_name
     map_name = 'link-' + arch + '.map'
     link_map = build / map_name
-    require(exe.is_file() and link_map.is_file(), 'Missing executable or link map for ' + arch)
+    trace_name = 'link-' + arch + '.log'
+    link_trace = build / trace_name
+    require(exe.is_file() and link_map.is_file() and link_trace.is_file(),
+            'Missing executable, link map or verbose linker record for ' + arch)
     exe_data = exe.read_bytes()
     map_data = link_map.read_bytes()
+    trace_data = link_trace.read_bytes()
     require('output_sha256=' + digest(exe_data) + ' ' + exe_name in metadata.splitlines(),
             'Executable hash differs from completed build: ' + arch)
     require('link_map_sha256=' + digest(map_data) + ' ' + map_name in metadata.splitlines(),
             'Link map hash differs from completed build: ' + arch)
-    libraries = sorted(set(re.findall(r'([A-Za-z0-9_+.-]+\.a)(?:\(|:)', map_data.decode('utf-8'))))
+    require('link_trace_sha256=' + digest(trace_data) + ' ' + trace_name in metadata.splitlines(),
+            'Verbose linker record hash differs from completed build: ' + arch)
+    # MinGW LLD maps flatten member names; --verbose retains actual archive provenance.
+    libraries = sorted(set(re.findall(r'^ld\.lld: Loaded (?:.*[/\\])?([A-Za-z0-9_+.-]+\.a)\(',
+                                      trace_data.decode('utf-8'), flags=re.MULTILINE)))
     require('libc++.a' in libraries and 'libmingw32.a' in libraries,
-            'Link map does not identify expected runtime libraries: ' + arch)
+            'Verbose linker record does not identify expected runtime libraries: ' + arch)
     require(not set(libraries).intersection({'libpthread.a', 'libwinpthread.a', 'libwinstorecompat.a'}),
             'Additional runtime notices need review before packaging: ' + arch)
     target = dist / ('JSONDictionaryEditor-Windows-' + arch + '.zip')

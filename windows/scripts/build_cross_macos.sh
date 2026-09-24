@@ -79,6 +79,7 @@ build_target() {
     output="$DIST_DIR/JSONDictionaryEditor-Windows-$label.exe"
     temporary="$BUILD_DIR/JSONDictionaryEditor-Windows-$label.tmp.exe"
     link_map="$BUILD_DIR/link-$label.map"
+    link_trace="$BUILD_DIR/link-$label.log"
 
     # Capture commands before filtering so metadata failures cannot be hidden by a pipe.
     "$compiler" --version > "$BUILD_DIR/compiler-$label.txt"
@@ -88,16 +89,19 @@ build_target() {
         printf 'tool_sha256=%s %s\n' "${digest%% *}" "$tool" >> "$METADATA"
     done
     (cd "$PROJECT_DIR/resources" && "$windres" --codepage=65001 app.rc -O coff -o "$resource")
+    printf 'Compiler/link log: %s\n' "$link_trace"
     "$compiler" \
         -std=c++17 -O2 -DNDEBUG \
         -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_WIN32_WINNT=0x0A00 \
         -Wall -Wextra -Wpedantic -Werror -ffunction-sections -fdata-sections \
         "$PROJECT_DIR/src/json_core.cpp" "$PROJECT_DIR/src/windows_app.cpp" "$resource" \
         -o "$temporary" -mwindows -municode -static -static-libgcc -static-libstdc++ \
-        "-Wl,-Map,$link_map" -Wl,--gc-sections -lbcrypt -lcomctl32 -lcomdlg32 -lshell32 -lole32 \
-        -luxtheme -lgdi32 -luser32
+        "-Wl,-Map,$link_map" -Wl,--verbose -Wl,--gc-sections -lbcrypt -lcomctl32 -lcomdlg32 -lshell32 -lole32 \
+        -luxtheme -lgdi32 -luser32 > "$link_trace" 2>&1
     "$TOOLCHAIN/bin/llvm-strip" "$temporary"
     mv -f "$temporary" "$output"
+    trace_digest=$(shasum -a 256 "$link_trace")
+    printf 'link_trace_sha256=%s link-%s.log\n' "${trace_digest%% *}" "$label" >> "$METADATA"
     map_digest=$(shasum -a 256 "$link_map")
     printf 'link_map_sha256=%s link-%s.map\n' "${map_digest%% *}" "$label" >> "$METADATA"
     digest=$(shasum -a 256 "$output")

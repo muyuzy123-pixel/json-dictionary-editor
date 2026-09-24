@@ -22,7 +22,7 @@ and SDK are not included in the download.
   full from the same toolchain. Its component notices are not replaced by
   the project's MIT license. The x64 and ARM64 copies have identical bytes.
 
-The preview packaging script checks the final link map and refuses a build
+The preview packaging script checks the final verbose linker record and refuses a build
 that also includes winpthreads or winstorecompat until the corresponding
 additional notices are reviewed and included. The mere presence of those
 libraries in a toolchain does not mean that they are linked into this app.
