@@ -1,5 +1,5 @@
 {
-  "status": "verified-private-preview",
+  "status": "public-prerelease-verified",
   "repository": "muyuzy123-pixel/json-dictionary-editor",
   "repository_id": 1386476275,
   "source_commit": "8631981691f74086ce7f517143a1f66b1032cbd3",
@@ -135,6 +135,68 @@
     "macOS minimum OS and physical Intel complete acceptance",
     "AX-direct-setValue immediate-save path; one earlier hang observed, cause not determined"
   ],
-  "published_at_utc": null,
-  "anonymous_verification": null
+  "published_at_utc": "2026-09-24T23:48:36.412698+00:00",
+  "anonymous_verification": {
+    "checked_at_utc": "2026-09-24T23:49:20.215858+00:00",
+    "authentication": "none; fresh urllib requests without Authorization or cookies",
+    "repository_id": 1386476275,
+    "public": true,
+    "prerelease": true,
+    "assets": [
+      {
+        "name": "JSONDictionaryEditor-macOS-Universal.zip",
+        "asset_id": 587081713,
+        "http_status": 200,
+        "bytes": 1225134,
+        "sha256": "ba63a5317d8607f400f919088e136c07e45034469efc3e3fbf10d67cf6a999fc",
+        "matches_local_and_github": true
+      },
+      {
+        "name": "JSONDictionaryEditor-Windows-arm64.zip",
+        "asset_id": 587081710,
+        "http_status": 200,
+        "bytes": 249452,
+        "sha256": "a41c4c7f4ce13aff2673e2d6d99fd2ff48e960f4b525969eceb3c82192244851",
+        "matches_local_and_github": true
+      },
+      {
+        "name": "JSONDictionaryEditor-Windows-x64.zip",
+        "asset_id": 587081709,
+        "http_status": 200,
+        "bytes": 271439,
+        "sha256": "c99861579be8d2e6c075e12a75da976713ca4dc780591c2bcc398fd68f6fd2d2",
+        "matches_local_and_github": true
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "asset_id": 587081717,
+        "http_status": 200,
+        "bytes": 315,
+        "sha256": "863ce67b1918c410d2ecbe25d11acbfc9ded93a819eb5deb373cc6616e6fd387",
+        "matches_local_and_github": true
+      }
+    ],
+    "pages": [
+      {
+        "page": "repository",
+        "url": "https://github.com/muyuzy123-pixel/json-dictionary-editor",
+        "http_status": 200
+      },
+      {
+        "page": "release",
+        "url": "https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/tag/preview-1",
+        "http_status": 200
+      },
+      {
+        "page": "README",
+        "url": "https://raw.githubusercontent.com/muyuzy123-pixel/json-dictionary-editor/main/README.md",
+        "http_status": 200
+      },
+      {
+        "page": "LICENSE",
+        "url": "https://raw.githubusercontent.com/muyuzy123-pixel/json-dictionary-editor/main/LICENSE",
+        "http_status": 200
+      }
+    ]
+  }
 }
