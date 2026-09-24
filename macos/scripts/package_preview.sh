@@ -94,7 +94,53 @@ codesign --force --sign - --timestamp=none "$STAGE/$APP_NAME" \
     2>&1 | tee "$RUN_AUDIT/sign.log"
 codesign --verify --deep --strict --verbose=4 "$STAGE/$APP_NAME" \
     2>&1 | tee "$RUN_AUDIT/staged-signature.log"
-COPYFILE_DISABLE=1 ditto -c -k --norsrc --noextattr --noqtn "$STAGE" "$PENDING_ZIP"
+python3 - "$STAGE" "$PENDING_ZIP" "$APP_NAME" <<'PY' | tee "$RUN_AUDIT/zip-utf8.log"
+import json
+from pathlib import Path, PurePosixPath
+import stat
+import sys
+from zipfile import ZIP_DEFLATED, ZipFile
+
+stage, archive = Path(sys.argv[1]), Path(sys.argv[2])
+app_name = sys.argv[3]
+expected_modes = {}
+with ZipFile(archive, "x", compression=ZIP_DEFLATED, compresslevel=9) as output:
+    for source in sorted(stage.rglob("*")):
+        relative = source.relative_to(stage).as_posix()
+        path = PurePosixPath(relative)
+        if source.is_symlink() or path.is_absolute() or ".." in path.parts:
+            raise SystemExit(f"Unsafe archive path: {relative}")
+        mode = source.stat().st_mode
+        if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+            raise SystemExit(f"Unsupported archive entry: {relative}")
+        name = relative + "/" if stat.S_ISDIR(mode) else relative
+        expected_modes[name] = mode & 0xFFFF
+        # ZipFile.write preserves Unix mode bits and marks non-ASCII names as UTF-8.
+        # It writes file contents and standard ZIP metadata, never macOS xattrs.
+        output.write(source, arcname=name)
+
+with ZipFile(archive) as verified:
+    bad_entry = verified.testzip()
+    if bad_entry is not None:
+        raise SystemExit(f"ZIP CRC failed: {bad_entry}")
+    names = set(verified.namelist())
+    if f"{app_name}/Contents/MacOS/JSONDictionaryEditor" not in names:
+        raise SystemExit("The Chinese App path is missing from the ZIP.")
+    unicode_count = 0
+    for entry in verified.infolist():
+        path = PurePosixPath(entry.filename)
+        if path.is_absolute() or ".." in path.parts:
+            raise SystemExit(f"Unsafe stored archive path: {entry.filename}")
+        mode = (entry.external_attr >> 16) & 0xFFFF
+        if entry.create_system != 3 or mode != expected_modes[entry.filename] or stat.S_ISLNK(mode):
+            raise SystemExit(f"Unix mode mismatch: {entry.filename}")
+        if not entry.filename.isascii():
+            unicode_count += 1
+            if not entry.flag_bits & 0x800:
+                raise SystemExit(f"UTF-8 filename flag missing: {entry.filename}")
+    print(json.dumps({"ZIP_UTF8_OK": True, "entries": len(names),
+                      "utf8_entries": unicode_count, "unix_modes_preserved": True}))
+PY
 unzip -tq "$PENDING_ZIP" 2>&1 | tee "$RUN_AUDIT/zip-integrity.log"
 unzip -Z1 "$PENDING_ZIP" > "$RUN_AUDIT/zip-entries.txt"
 ditto -x -k "$PENDING_ZIP" "$EXTRACTED"

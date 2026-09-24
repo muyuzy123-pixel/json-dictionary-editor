@@ -36,6 +36,6 @@ BUILD_DIR=/tmp/json-editor-build ./macos/scripts/verify.sh
 
 ## 维护者预览打包
 
-签名通过独立 `macos/scripts/package_preview.sh` 进行，只处理暂存副本，不改变无签名构建入口。需要候选自身干净 Git 仓库、显式源码提交、已通过的无签名构建，以及 Apple 芯片+Rosetta 用于最终双架构诊断；具体参数见[发布流程](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/RELEASING.md)。
+预览归档需要 Python 3 标准库，用于正确写入 UTF-8 文件名。签名通过独立 `macos/scripts/package_preview.sh` 进行，只处理暂存副本，不改变无签名构建入口。需要候选自身干净 Git 仓库、显式源码提交、已通过的无签名构建，以及 Apple 芯片+Rosetta 用于最终双架构诊断；具体参数见[发布流程](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/RELEASING.md)。
 
 程序也提供 `--version`、`--self-test`、`--validate-json FILE`。合法数据返回 0，数据错误返回 1，缺少校验参数返回 2；未知参数沿用 GUI 启动行为。
