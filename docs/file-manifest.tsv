@@ -2,10 +2,10 @@ candidate_file	status	bytes	sha256	origin_relative_file	original_sha256
 .github/workflows/verify-preview.yml	added	9054	d970469e7dc30f9a4f4a5cb562c7a0dc5a2ddc28a25749aa18ffcdb6cfffee27	-	-
 .gitignore	added	197	416b6069a40f3b2c282641f05a33bfa536246ec9a9f039a2b977d6f0067aca00	-	-
 LICENSE	added	1072	ba18e218589617fda5369b3e9ba7261e1e7284121a5b3e80a552861e0901a210	-	-
-README.md	added	4751	849449d52796ca6a23a2fac10fac734c77dc967aa2225b467719f74e0bed645f	-	-
+README.md	added	4887	c10d037458e7672b0728530c241aed1dc760e9295f49c07d1e233d158895de72	-	-
 SHA256SUMS	inventory	-	not self-hashed	-	-
 THIRD_PARTY_NOTICES.txt	added	2418	d6de54b3613bf50a183d8739759075cc4bb3d3a83c59c92458e41c11bdd116cd	-	-
-docs/PREVIEW_RELEASE.md	added	1126	33535845e0040e79b69ec7fb428edb80001dda9e2a458b226ef7635e052d4a1c	-	-
+docs/PREVIEW_RELEASE.md	added	3969	bead727c21f363862bc2bd71e2672f8e4ff5fe33207265325a68d5dbc24fbbca	-	-
 docs/RELEASING.md	added	3066	4ba0d67e1ca6c5d9137533dc117ca649efcab2613d1acda320e499fb76e65e95	-	-
 docs/build-evidence.json	added	565	b65a34797661b26d7ce6854a9bc34173ce842e43e713f805e7702d92c7c67e6a	-	-
 docs/data-rules.md	added	4737	63d6383eabeee48ec79a1d8652e155c73dbc4570055d23141e2354cda84c0dfe	-	-
@@ -15,6 +15,7 @@ docs/icon-update-evidence.json	added	662	2fbf66ce1266310db014d5952ccaf488c9787b9
 docs/licensing.md	added	3318	3e7dc3c8e78877205d530d7be41cbeb37a2197be4735d9c39c34d541b2738a9a	-	-
 docs/migration.md	added	2015	2db5b50d3f9861e6006e9e0fb616b6850227c256a26495055f2ba4792b0925d2	-	-
 docs/platform-differences.md	added	3095	e10fee491d633fb279397ad16b2f7e976b98882cbeffa04b30c5ad09e6b37af1	-	-
+docs/release-evidence.json	added	4998	b000bc55c004d6607e123df8db48081cb401c27daf67d1c3715b291bbc5af3ed	-	-
 docs/verification.md	added	2349	26a8ef3f448588efe940d434d411a1ebef8fc51ccbaf58c9af7ec48a8daa036b	-	-
 licenses/COPYING.MinGW-w64-runtime.txt	added	12155	1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f	-	-
 licenses/LLVM-LICENSE.TXT	added	15141	8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee	-	-

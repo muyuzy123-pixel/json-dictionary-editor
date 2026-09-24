@@ -1,0 +1,140 @@
+{
+  "status": "verified-private-preview",
+  "repository": "muyuzy123-pixel/json-dictionary-editor",
+  "repository_id": 1386476275,
+  "source_commit": "8631981691f74086ce7f517143a1f66b1032cbd3",
+  "tag": "preview-1",
+  "prerelease": true,
+  "assets": [
+    {
+      "name": "JSONDictionaryEditor-macOS-Universal.zip",
+      "bytes": 1225134,
+      "sha256": "ba63a5317d8607f400f919088e136c07e45034469efc3e3fbf10d67cf6a999fc",
+      "source": {
+        "app_version": "1.0.0",
+        "architecture": "universal",
+        "tag": "preview-1",
+        "source_commit": "8631981691f74086ce7f517143a1f66b1032cbd3"
+      }
+    },
+    {
+      "name": "JSONDictionaryEditor-Windows-x64.zip",
+      "bytes": 271439,
+      "sha256": "c99861579be8d2e6c075e12a75da976713ca4dc780591c2bcc398fd68f6fd2d2",
+      "source": {
+        "source_commit": "8631981691f74086ce7f517143a1f66b1032cbd3",
+        "tag": "preview-1",
+        "app_version": "1.0.1",
+        "architecture": "x64"
+      }
+    },
+    {
+      "name": "JSONDictionaryEditor-Windows-arm64.zip",
+      "bytes": 249452,
+      "sha256": "a41c4c7f4ce13aff2673e2d6d99fd2ff48e960f4b525969eceb3c82192244851",
+      "source": {
+        "source_commit": "8631981691f74086ce7f517143a1f66b1032cbd3",
+        "tag": "preview-1",
+        "app_version": "1.0.1",
+        "architecture": "arm64"
+      }
+    }
+  ],
+  "macos": {
+    "app_version": "1.0.0 (1)",
+    "signature": "ad-hoc",
+    "notarized": false,
+    "environment": {
+      "host": "macOS 26.6.2 (25G83) arm64",
+      "Xcode": "26.6 (17F113)",
+      "Swift": "6.3.3",
+      "Clang": "21.0.0",
+      "SDK": "26.5"
+    },
+    "unsigned_build_preserved": true,
+    "final_zip_utf8_and_modes": true,
+    "extracted_strict_signature": true,
+    "arm64_and_x86_64_cli": true,
+    "fixed_icon_sha256": "e0a3b35e53ee2fe28bd95b988e6d9555a4902361c3338051c3667e92245ea53d",
+    "gui": {
+      "source_commit": "8631981691f74086ce7f517143a1f66b1032cbd3",
+      "archive_sha256": "ba63a5317d8607f400f919088e136c07e45034469efc3e3fbf10d67cf6a999fc",
+      "app_source": "Final ZIP extracted App, package-publish/extracted",
+      "normal_input_sequence": [
+        "launch",
+        "open independent sample copy",
+        "focus/select text",
+        "paste Chinese multiline value",
+        "verify model text changed",
+        "Cmd+S",
+        "close document",
+        "reopen and verify value"
+      ],
+      "independent_json_parse": true,
+      "other_fields_and_key_order_preserved": true,
+      "app_validate_json_exit": 0,
+      "nodes": 13,
+      "saved_file_sha256": "039f75389f992365e7f388db04c7c65e36682dff477358dcf0242ad8feed0afe",
+      "not_full_gui_acceptance": true,
+      "earlier_automation_anomaly": "Earlier AX direct setValue followed immediately by Cmd+S stalled in NSDocument serialization; original record retained. This path is not counted as passed; normal focused paste/save/reopen sequence passed. Root cause not established."
+    }
+  },
+  "windows": {
+    "app_version": "1.0.1",
+    "authenticode": false,
+    "build_exit_code": 0,
+    "package_exit_code": 0,
+    "audit_exit_code": 0,
+    "toolchain": "LLVM-MinGW 20260616 UCRT / Clang 22.1.8",
+    "toolchain_archive_sha256": "2cab02a2e964bd4aae981150a45985d07c657cfa8d244959eb9e2dcc5eedd7b1",
+    "loaded_static_archives": {
+      "JSONDictionaryEditor-Windows-x64.zip": [
+        "libc++.a",
+        "libclang_rt.builtins-x86_64.a",
+        "libmingw32.a",
+        "libmingwex.a",
+        "libmsvcrt.a",
+        "libunwind.a"
+      ],
+      "JSONDictionaryEditor-Windows-arm64.zip": [
+        "libc++.a",
+        "libclang_rt.builtins-aarch64.a",
+        "libmingw32.a",
+        "libmingwex.a",
+        "libmsvcrt.a",
+        "libunwind.a"
+      ]
+    },
+    "embedded_ico_and_manifest_match": true,
+    "third_party_notices_packaged": true,
+    "upstream_diagnostic_path_note": "EXEs retain public LLVM upstream CI build-source diagnostic strings; no current maintainer home paths were found."
+  },
+  "windows_ci": {
+    "id": 36073962567,
+    "url": "https://github.com/muyuzy123-pixel/json-dictionary-editor/actions/runs/36073962567",
+    "head_sha": "8631981691f74086ce7f517143a1f66b1032cbd3",
+    "conclusion": "success",
+    "runner_label": "windows-2025",
+    "actual_image": "windows-2025-vs2026",
+    "image_version": "20260907.229.1",
+    "os": "Microsoft Windows Server 2025 Datacenter 10.0.26100",
+    "contents_permission": "read",
+    "diagnostic_exit_codes": {
+      "version": 0,
+      "self-test": 0,
+      "valid-json": 0,
+      "duplicate-key": 1,
+      "missing-argument": 2
+    }
+  },
+  "private_download_all_four_identical": true,
+  "not_verified": [
+    "Windows ARM64 real-device execution",
+    "Windows icon and splitter visual acceptance",
+    "Windows IME, DPI and full GUI",
+    "macOS minimum OS and physical Intel complete acceptance",
+    "AX-direct-setValue immediate-save path; one earlier hang observed, cause not determined"
+  ],
+  "published_at_utc": null,
+  "anonymous_verification": null
+}

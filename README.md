@@ -6,7 +6,7 @@
 
 ## 首次预览 `preview-1`
 
-发布准备中：先在私有仓库核验最终下载包，通过后公开。下面的下载链接仅在预览发布可访问后生效；最新状态与实际验收见 [发布记录](docs/PREVIEW_RELEASE.md)。
+`preview-1` 提供以下下载包；当前发布状态、实际验收及已知限制见 [发布记录](docs/PREVIEW_RELEASE.md)。
 
 | 下载 | 应用版本 | 平台与分发状态 |
 |---|---|---|
@@ -29,7 +29,9 @@ macOS 可用 `shasum -a 256 下载文件.zip`，Windows 可用 `Get-FileHash -Al
 
 ## 验证范围
 
-发布前检查最终 Mac 包的签名、两架构诊断及局部编辑保存流程；Windows x64 的最终 ZIP 由 Windows CI 下载并运行诊断和内置文件自测。实际通过状态仅以[发布记录](docs/PREVIEW_RELEASE.md)为准。
+最终 Mac 包的签名、两架构诊断及正常输入/保存/重开局部流程通过；Windows x64 最终 ZIP 已通过 Windows CI 下载校验、诊断和内置文件自测。详见[发布记录](docs/PREVIEW_RELEASE.md)。
+
+已知异常：一次辅助功能直接赋值后立即保存的自动化尝试曾挂起，根因未明、未确认修复，该路径未计为通过。后续正常输入流程的局部成功不代表所有保存路径均已验收。
 
 **Windows ARM64 实机、Windows 图标与 1.0.1 分隔条修复后视觉、输入法、DPI 和完整 GUI 验收仍未完成。** Windows CI 运行环境不是 Windows 10/11 的完整桌面验收。macOS 最低系统版本和真实 Intel 设备也不能从一次 Universal 构建推导为已通过。
 
