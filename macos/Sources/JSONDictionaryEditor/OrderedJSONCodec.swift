@@ -69,7 +69,7 @@ struct OrderedJSONParser {
             }
             let key = try parseString()
             guard !keys.contains(key) else {
-                throw error("对象中存在重复键“\(key)”")
+                throw error(.duplicateKey(key))
             }
             keys.insert(key)
             skipWhitespace()
@@ -208,7 +208,7 @@ struct OrderedJSONParser {
         }
         let token = String(decoding: bytes[start..<index], as: UTF8.self)
         guard JSONNumberValidator.isValid(token) else {
-            throw error("“\(token)”不是有效的 JSON 数字")
+            throw error(.invalidNumber(token))
         }
         return token
     }
@@ -217,11 +217,11 @@ struct OrderedJSONParser {
         let expected = Array(literal.utf8)
         guard index + expected.count <= bytes.count,
               Array(bytes[index..<(index + expected.count)]) == expected else {
-            throw error("无效的字面量，预期为 \(literal)")
+            throw error(.expectedLiteral(literal))
         }
         index += expected.count
         if let next = currentByte, !isDelimiter(next) {
-            throw error("字面量 \(literal) 后包含无效字符")
+            throw error(.invalidLiteralSuffix(literal))
         }
     }
 
@@ -252,6 +252,10 @@ struct OrderedJSONParser {
     }
 
     private func error(_ message: String) -> JSONModelError {
+        error(.message(message))
+    }
+
+    private func error(_ issue: JSONParseIssue) -> JSONModelError {
         var line = 1
         var column = 1
         for byte in bytes.prefix(index) {
@@ -262,7 +266,7 @@ struct OrderedJSONParser {
                 column += 1
             }
         }
-        return .parse(message: message, line: line, column: column)
+        return .parse(issue: issue, line: line, column: column)
     }
 }
 

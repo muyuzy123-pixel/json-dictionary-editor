@@ -22,6 +22,11 @@ if (-not (Test-Path -LiteralPath $Exe)) {
 }
 
 $Exe = (Resolve-Path -LiteralPath $Exe).Path
+$fileVersion = (Get-Item -LiteralPath $Exe).VersionInfo
+if (($fileVersion.FileMajorPart -ne 1) -or ($fileVersion.FileMinorPart -ne 1) -or
+    ($fileVersion.FileBuildPart -ne 1)) {
+    throw "Expected JSON Dictionary Editor 1.1.1; found $($fileVersion.FileVersion)"
+}
 $sampleName = 'JSONDictionaryEditor-verify-{0}.json' -f ([Guid]::NewGuid().ToString('N'))
 $sample = Join-Path ([System.IO.Path]::GetTempPath()) $sampleName
 $gui = $null

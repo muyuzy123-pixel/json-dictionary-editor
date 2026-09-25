@@ -180,13 +180,15 @@ public:
     Node run() {
         if (const auto bad = invalid_utf8_offset(text_)) {
             const auto [line, column] = line_and_column(text_, *bad);
-            throw Error(ErrorCode::InvalidUtf8, "Input is not valid UTF-8", line, column);
+            throw Error(ErrorCode::InvalidUtf8, "Input is not valid UTF-8", line, column,
+                        {}, ErrorReason::InputNotUtf8);
         }
         skip_whitespace();
-        if (at_end()) fail("JSON content is empty");
+        if (at_end()) fail(ErrorReason::Empty, "JSON content is empty");
         Node result = parse_value();
         skip_whitespace();
-        if (!at_end()) fail("Unexpected content after JSON value");
+        if (!at_end()) fail(ErrorReason::TrailingContent,
+                            "Unexpected content after JSON value");
         return result;
     }
 
@@ -215,14 +217,18 @@ private:
         return at_end() ? 0 : static_cast<unsigned char>(text_[index_]);
     }
 
-    [[noreturn]] void fail(std::string message) const {
+    [[noreturn]] void fail(ErrorReason reason, std::string message,
+                           std::string argument = {}) const {
         const auto [line, column] = line_and_column(text_, index_);
-        throw Error(ErrorCode::Parse, std::move(message), line, column);
+        throw Error(ErrorCode::Parse, std::move(message), line, column,
+                    {}, reason, std::move(argument));
     }
 
-    [[noreturn]] void fail(ErrorCode code, std::string message) const {
+    [[noreturn]] void fail(ErrorCode code, ErrorReason reason, std::string message,
+                           std::string argument = {}) const {
         const auto [line, column] = line_and_column(text_, index_);
-        throw Error(code, std::move(message), line, column);
+        throw Error(code, std::move(message), line, column,
+                    {}, reason, std::move(argument));
     }
 
     static bool is_delimiter(unsigned char byte) noexcept {
@@ -244,14 +250,14 @@ private:
         return true;
     }
 
-    void expect(unsigned char expected, const char* message) {
-        if (!consume_if(expected)) fail(message);
+    void expect(unsigned char expected, ErrorReason reason, const char* message) {
+        if (!consume_if(expected)) fail(reason, message);
     }
 
     Node parse_value() {
-        if (at_end()) fail("Missing JSON value");
+        if (at_end()) fail(ErrorReason::MissingValue, "Missing JSON value");
         if (++node_count_ > kMaximumNodeCount) {
-            fail("JSON exceeds the 250000-node safety limit");
+            fail(ErrorReason::TooManyNodes, "JSON exceeds the 250000-node safety limit");
         }
         switch (current()) {
             case '"': return Node::string(parse_string());
@@ -264,35 +270,38 @@ private:
             case '0': case '1': case '2': case '3': case '4':
             case '5': case '6': case '7': case '8': case '9':
                 return Node::number(parse_number());
-            default: fail("Unrecognized JSON value");
+            default: fail(ErrorReason::UnrecognizedValue, "Unrecognized JSON value");
         }
     }
 
     Node parse_object() {
         if (depth_ >= kMaximumNestingDepth) {
-            fail("JSON nesting exceeds the 512-level safety limit");
+            fail(ErrorReason::TooDeep, "JSON nesting exceeds the 512-level safety limit");
         }
         DepthGuard depth_guard(depth_);
-        expect('{', "Expected '{'");
+        expect('{', ErrorReason::ExpectedObjectOpen, "Expected '{'");
         skip_whitespace();
         Node::Object members;
         std::unordered_set<std::string> keys;
         if (consume_if('}')) return Node::object(std::move(members));
 
         while (true) {
-            if (at_end() || current() != '"') fail("Object key must be a quoted string");
+            if (at_end() || current() != '"')
+                fail(ErrorReason::QuotedKey, "Object key must be a quoted string");
             std::string key = parse_string();
             if (!keys.insert(key).second) {
-                fail(ErrorCode::DuplicateKey, "Duplicate object key: " + key);
+                fail(ErrorCode::DuplicateKey, ErrorReason::DuplicateKey,
+                     "Duplicate object key: " + key, key);
             }
             skip_whitespace();
-            expect(':', "Expected ':' after object key");
+            expect(':', ErrorReason::ExpectedColon, "Expected ':' after object key");
             skip_whitespace();
             Node value = parse_value();
             members.push_back(Node::Member{std::move(key), std::move(value)});
             skip_whitespace();
             if (consume_if('}')) break;
-            expect(',', "Expected ',' between object members");
+            expect(',', ErrorReason::ExpectedObjectComma,
+                   "Expected ',' between object members");
             skip_whitespace();
         }
         return Node::object(std::move(members));
@@ -300,10 +309,10 @@ private:
 
     Node parse_array() {
         if (depth_ >= kMaximumNestingDepth) {
-            fail("JSON nesting exceeds the 512-level safety limit");
+            fail(ErrorReason::TooDeep, "JSON nesting exceeds the 512-level safety limit");
         }
         DepthGuard depth_guard(depth_);
-        expect('[', "Expected '['");
+        expect('[', ErrorReason::ExpectedArrayOpen, "Expected '['");
         skip_whitespace();
         Node::Array values;
         if (consume_if(']')) return Node::array(std::move(values));
@@ -312,14 +321,16 @@ private:
             values.push_back(parse_value());
             skip_whitespace();
             if (consume_if(']')) break;
-            expect(',', "Expected ',' between array elements");
+            expect(',', ErrorReason::ExpectedArrayComma,
+                   "Expected ',' between array elements");
             skip_whitespace();
         }
         return Node::array(std::move(values));
     }
 
     std::uint32_t parse_hex_code_unit() {
-        if (index_ + 4 > text_.size()) fail("Incomplete Unicode escape");
+        if (index_ + 4 > text_.size())
+            fail(ErrorReason::UnicodeIncomplete, "Incomplete Unicode escape");
         std::uint32_t value = 0;
         for (int count = 0; count < 4; ++count) {
             const unsigned char byte = current();
@@ -328,20 +339,22 @@ private:
             if (byte >= '0' && byte <= '9') value += byte - '0';
             else if (byte >= 'A' && byte <= 'F') value += byte - 'A' + 10;
             else if (byte >= 'a' && byte <= 'f') value += byte - 'a' + 10;
-            else fail("Unicode escape requires four hexadecimal digits");
+            else fail(ErrorReason::UnicodeHex,
+                      "Unicode escape requires four hexadecimal digits");
         }
         return value;
     }
 
     std::string parse_string() {
-        expect('"', "Expected opening quote");
+        expect('"', ErrorReason::OpeningQuote, "Expected opening quote");
         std::string result;
         while (!at_end()) {
             const unsigned char byte = current();
             ++index_;
             if (byte == '"') return result;
             if (byte == '\\') {
-                if (at_end()) fail("Incomplete string escape");
+                if (at_end()) fail(ErrorReason::StringEscapeIncomplete,
+                                   "Incomplete string escape");
                 const unsigned char escaped = current();
                 ++index_;
                 switch (escaped) {
@@ -358,49 +371,52 @@ private:
                         if (first >= 0xD800 && first <= 0xDBFF) {
                             if (index_ + 2 > text_.size() || text_[index_] != '\\' ||
                                 text_[index_ + 1] != 'u') {
-                                fail("High surrogate must be followed by a low surrogate");
+                                fail(ErrorReason::HighSurrogate,
+                                     "High surrogate must be followed by a low surrogate");
                             }
                             index_ += 2;
                             const std::uint32_t second = parse_hex_code_unit();
                             if (second < 0xDC00 || second > 0xDFFF) {
-                                fail("Invalid low surrogate");
+                                fail(ErrorReason::InvalidLowSurrogate, "Invalid low surrogate");
                             }
                             const std::uint32_t scalar =
                                 0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00);
                             append_utf8(result, scalar);
                         } else if (first >= 0xDC00 && first <= 0xDFFF) {
-                            fail("Isolated low surrogate");
+                            fail(ErrorReason::IsolatedLowSurrogate, "Isolated low surrogate");
                         } else {
                             append_utf8(result, first);
                         }
                         break;
                     }
-                    default: fail("Unsupported string escape");
+                    default: fail(ErrorReason::UnsupportedEscape, "Unsupported string escape");
                 }
             } else {
-                if (byte < 0x20) fail("Unescaped control character in string");
+                if (byte < 0x20) fail(ErrorReason::ControlCharacter,
+                                      "Unescaped control character in string");
                 result.push_back(static_cast<char>(byte));
             }
         }
-        fail("Unterminated string");
+        fail(ErrorReason::UnterminatedString, "Unterminated string");
     }
 
     std::string parse_number() {
         const std::size_t start = index_;
         while (!at_end() && !is_delimiter(current())) ++index_;
         const std::string token(text_.substr(start, index_ - start));
-        if (!is_valid_number(token)) fail("Invalid JSON number: " + token);
+        if (!is_valid_number(token)) fail(ErrorReason::InvalidNumber,
+                                          "Invalid JSON number: " + token, token);
         return token;
     }
 
     void consume_literal(std::string_view literal) {
         if (index_ + literal.size() > text_.size() ||
             text_.substr(index_, literal.size()) != literal) {
-            fail("Invalid JSON literal");
+            fail(ErrorReason::InvalidLiteral, "Invalid JSON literal");
         }
         index_ += literal.size();
         if (!at_end() && !is_delimiter(current())) {
-            fail("Invalid character after JSON literal");
+            fail(ErrorReason::LiteralSuffix, "Invalid character after JSON literal");
         }
     }
 };
@@ -427,20 +443,23 @@ void validate_at(const Node& node, const std::string& path, std::size_t containe
     const bool container = node.kind() == Kind::Object || node.kind() == Kind::Array;
     if (container && container_depth >= kMaximumNestingDepth) {
         throw Error(ErrorCode::Parse,
-                    "JSON nesting exceeds the 512-level safety limit", 0, 0, path);
+                    "JSON nesting exceeds the 512-level safety limit", 0, 0, path,
+                    ErrorReason::TooDeep);
     }
     const std::size_t child_depth = container ? container_depth + 1 : container_depth;
     switch (node.kind()) {
         case Kind::String:
             if (!is_valid_utf8(node.as_string())) {
                 throw Error(ErrorCode::InvalidUtf8,
-                            "String value is not valid UTF-8", 0, 0, path);
+                            "String value is not valid UTF-8", 0, 0, path,
+                            ErrorReason::StringNotUtf8);
             }
             break;
         case Kind::Number:
             if (!is_valid_number(node.as_number().text)) {
                 throw Error(ErrorCode::InvalidNumber,
-                            "Invalid JSON number: " + node.as_number().text, 0, 0, path);
+                            "Invalid JSON number: " + node.as_number().text, 0, 0, path,
+                            ErrorReason::InvalidNumber, node.as_number().text);
             }
             break;
         case Kind::Object: {
@@ -448,11 +467,13 @@ void validate_at(const Node& node, const std::string& path, std::size_t containe
             for (const auto& member : node.as_object()) {
                 if (!is_valid_utf8(member.key)) {
                     throw Error(ErrorCode::InvalidUtf8,
-                                "Object key is not valid UTF-8", 0, 0, path);
+                                "Object key is not valid UTF-8", 0, 0, path,
+                                ErrorReason::KeyNotUtf8);
                 }
                 if (!keys.insert(member.key).second) {
                     throw Error(ErrorCode::DuplicateKey,
-                                "Duplicate object key: " + member.key, 0, 0, path);
+                                "Duplicate object key: " + member.key, 0, 0, path,
+                                ErrorReason::DuplicateKey, member.key);
                 }
                 validate_at(member.value, path_for_key(path, member.key), child_depth);
             }
@@ -820,9 +841,12 @@ Error::Error(ErrorCode code,
              std::string message,
              std::size_t line,
              std::size_t column,
-             std::string path)
+             std::string path,
+             ErrorReason reason,
+             std::string argument)
     : std::runtime_error(std::move(message)),
-      code_(code), line_(line), column_(column), path_(std::move(path)) {}
+      code_(code), line_(line), column_(column), path_(std::move(path)),
+      reason_(reason), argument_(std::move(argument)) {}
 
 bool is_valid_utf8(std::string_view text) noexcept {
     return !invalid_utf8_offset(text).has_value();
@@ -882,7 +906,8 @@ Formatting detect_formatting(std::string_view text) noexcept {
 
 void validate(const Node& node, bool require_root_object) {
     if (require_root_object && node.kind() != Kind::Object) {
-        throw Error(ErrorCode::RootMustBeObject, "JSON root must be an object", 0, 0, "$");
+        throw Error(ErrorCode::RootMustBeObject, "JSON root must be an object", 0, 0,
+                    "$", ErrorReason::RootObject);
     }
     validate_at(node, "$", 0);
 }

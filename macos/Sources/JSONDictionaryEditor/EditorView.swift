@@ -6,6 +6,7 @@ private struct RawEditorTarget: Identifiable {
 
 struct DocumentEditorView: View {
     @Binding var document: JSONDictionaryDocument
+    @EnvironmentObject private var language: LanguageStore
 
     @State private var selection: UUID?
     @State private var expanded = Set<UUID>()
@@ -23,6 +24,7 @@ struct DocumentEditorView: View {
     }
 
     var body: some View {
+        let _ = language.preference
         VStack(spacing: 0) {
             HSplitView {
                 treePane
@@ -46,14 +48,14 @@ struct DocumentEditorView: View {
         .sheet(item: $rawEditorTarget) { target in
             RawJSONEditorSheet(document: $document, nodeID: target.id)
         }
-        .alert("删除所选容器？", isPresented: $showsDeleteConfirmation) {
-            Button("取消", role: .cancel) { pendingDeleteID = nil }
-            Button("删除", role: .destructive) {
+        .alert(tr("删除所选容器？"), isPresented: $showsDeleteConfirmation) {
+            Button(tr("取消"), role: .cancel) { pendingDeleteID = nil }
+            Button(tr("删除"), role: .destructive) {
                 if let id = pendingDeleteID { deleteImmediately(id) }
                 pendingDeleteID = nil
             }
         } message: {
-            Text("其中的所有子项也会被删除。此更改会标记在文档中，保存前请确认内容。")
+            Text(tr("其中的所有子项也会被删除。此更改会标记在文档中，保存前请确认内容。"))
         }
         .onAppear {
             expanded.insert(document.root.id)
@@ -70,7 +72,7 @@ struct DocumentEditorView: View {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("搜索键名、路径、类型或值", text: $searchText)
+                TextField(tr("搜索键名、路径、类型或值"), text: $searchText)
                     .textFieldStyle(.plain)
                 if !searchText.isEmpty {
                     Button {
@@ -80,7 +82,7 @@ struct DocumentEditorView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("清除搜索")
+                    .help(tr("清除搜索"))
                 }
             }
             .padding(.horizontal, 12)
@@ -90,11 +92,11 @@ struct DocumentEditorView: View {
             Divider()
 
             HStack(spacing: 10) {
-                Text("键 / 索引")
+                Text(tr("键 / 索引"))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("类型")
+                Text(tr("类型"))
                     .frame(width: 66, alignment: .leading)
-                Text("值")
+                Text(tr("值"))
                     .frame(width: 150, alignment: .leading)
             }
             .font(.caption)
@@ -127,9 +129,9 @@ struct DocumentEditorView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 30))
                             .foregroundStyle(.tertiary)
-                        Text("没有匹配项")
+                        Text(tr("没有匹配项"))
                             .font(.headline)
-                        Text("尝试缩短关键词或搜索 JSON 路径。")
+                        Text(tr("尝试缩短关键词或搜索 JSON 路径。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -145,73 +147,76 @@ struct DocumentEditorView: View {
             Menu {
                 addMenuItems()
             } label: {
-                Label("添加", systemImage: "plus")
+                Label(tr("添加"), systemImage: "plus")
             }
-            .help("向所选容器添加子项；若选择的是值，则添加同级项")
+            .help(tr("向所选容器添加子项；若选择的是值，则添加同级项"))
 
             Button {
                 duplicateSelected()
             } label: {
-                Label("复制", systemImage: "plus.square.on.square")
+                Label(tr("复制"), systemImage: "plus.square.on.square")
             }
             .disabled(selectedID == document.root.id)
-            .help("复制所选项")
+            .help(tr("复制所选项"))
 
             Button {
                 requestDelete()
             } label: {
-                Label("删除", systemImage: "trash")
+                Label(tr("删除"), systemImage: "trash")
             }
             .disabled(selectedID == document.root.id)
-            .help("删除所选项")
+            .help(tr("删除所选项"))
 
             Divider()
 
             Button {
                 moveSelected(by: -1)
             } label: {
-                Label("上移", systemImage: "arrow.up")
+                Label(tr("上移"), systemImage: "arrow.up")
             }
             .disabled(!document.canMove(selectedID, offset: -1))
-            .help("上移所选项")
+            .help(tr("上移所选项"))
 
             Button {
                 moveSelected(by: 1)
             } label: {
-                Label("下移", systemImage: "arrow.down")
+                Label(tr("下移"), systemImage: "arrow.down")
             }
             .disabled(!document.canMove(selectedID, offset: 1))
-            .help("下移所选项")
+            .help(tr("下移所选项"))
 
             Divider()
 
             Button {
                 rawEditorTarget = RawEditorTarget(id: selectedID)
             } label: {
-                Label("原始 JSON", systemImage: "chevron.left.forwardslash.chevron.right")
+                Label(tr("原始 JSON"), systemImage: "chevron.left.forwardslash.chevron.right")
             }
-            .help("以原始 JSON 编辑所选节点")
+            .help(tr("以原始 JSON 编辑所选节点"))
         }
     }
 
     private var statusBar: some View {
         HStack(spacing: 12) {
-            Label("有效 JSON 字典", systemImage: "checkmark.circle.fill")
+            Label(tr("有效 JSON 字典"), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
 
-            Text("\(document.rootKeyCount) 个顶层键 · \(document.nodeCount) 个节点")
+            Text(LanguageStore.shared.count(document.rootKeyCount,
+                                            one: "个顶层键", other: "个顶层键复数", chinese: "个顶层键") +
+                " · " + LanguageStore.shared.count(document.nodeCount,
+                    one: "个节点", other: "个节点复数", chinese: "个节点"))
                 .foregroundStyle(.secondary)
 
             Spacer()
 
             Menu {
-                Picker("缩进", selection: $document.formatting) {
+                Picker(tr("缩进"), selection: $document.formatting) {
                     ForEach(JSONFormatting.allCases) { style in
                         Text(style.title).tag(style)
                     }
                 }
                 Divider()
-                Toggle("文件末尾保留换行", isOn: $document.trailingNewline)
+                Toggle(tr("文件末尾保留换行"), isOn: $document.trailingNewline)
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "text.alignleft")
@@ -220,7 +225,7 @@ struct DocumentEditorView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("保存格式")
+            .help(tr("保存格式"))
         }
         .font(.caption)
         .padding(.horizontal, 12)
@@ -231,37 +236,37 @@ struct DocumentEditorView: View {
 
     @ViewBuilder
     private func addMenuItems(relativeTo nodeID: UUID? = nil) -> some View {
-        Button { addNode(.string, relativeTo: nodeID) } label: { Label("字符串", systemImage: JSONKind.string.symbolName) }
-        Button { addNode(.number, relativeTo: nodeID) } label: { Label("数字", systemImage: JSONKind.number.symbolName) }
-        Button { addNode(.boolean, relativeTo: nodeID) } label: { Label("布尔值", systemImage: JSONKind.boolean.symbolName) }
+        Button { addNode(.string, relativeTo: nodeID) } label: { Label(tr("字符串"), systemImage: JSONKind.string.symbolName) }
+        Button { addNode(.number, relativeTo: nodeID) } label: { Label(tr("数字"), systemImage: JSONKind.number.symbolName) }
+        Button { addNode(.boolean, relativeTo: nodeID) } label: { Label(tr("布尔值"), systemImage: JSONKind.boolean.symbolName) }
         Button { addNode(.null, relativeTo: nodeID) } label: { Label("Null", systemImage: JSONKind.null.symbolName) }
         Divider()
-        Button { addNode(.object, relativeTo: nodeID) } label: { Label("对象", systemImage: JSONKind.object.symbolName) }
-        Button { addNode(.array, relativeTo: nodeID) } label: { Label("数组", systemImage: JSONKind.array.symbolName) }
+        Button { addNode(.object, relativeTo: nodeID) } label: { Label(tr("对象"), systemImage: JSONKind.object.symbolName) }
+        Button { addNode(.array, relativeTo: nodeID) } label: { Label(tr("数组"), systemImage: JSONKind.array.symbolName) }
     }
 
     @ViewBuilder
     private func nodeContextMenu(for row: JSONFlatRow) -> some View {
         if row.node.isContainer {
-            Menu("添加子项") { addMenuItems(relativeTo: row.id) }
+            Menu(tr("添加子项")) { addMenuItems(relativeTo: row.id) }
             Divider()
         }
-        Button("编辑原始 JSON…") {
+        Button(tr("编辑原始 JSON…")) {
             selection = row.id
             rawEditorTarget = RawEditorTarget(id: row.id)
         }
         if case .object = row.node.value {
-            Button("按键名排序") {
+            Button(tr("按键名排序")) {
                 _ = document.sortObject(at: row.id)
             }
         }
         if row.id != document.root.id {
             Divider()
-            Button("复制") {
+            Button(tr("复制")) {
                 selection = row.id
                 duplicateSelected()
             }
-            Button("删除", role: .destructive) {
+            Button(tr("删除"), role: .destructive) {
                 selection = row.id
                 requestDelete(row.id)
             }
@@ -322,12 +327,14 @@ struct DocumentEditorView: View {
 }
 
 private struct NodeTreeRow: View {
+    @EnvironmentObject private var language: LanguageStore
     let row: JSONFlatRow
     let isExpanded: Bool
     let isSearching: Bool
     let toggleExpanded: () -> Void
 
     var body: some View {
+        let _ = language.preference
         HStack(spacing: 10) {
             HStack(spacing: 4) {
                 Color.clear

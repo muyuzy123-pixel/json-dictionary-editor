@@ -1,13 +1,26 @@
-name: Verify Windows preview asset
+name: Verify Windows release asset
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Prerelease tag to verify
+        description: Release tag to verify
         required: true
-        default: preview-1
+        default: v1.1.1
         type: string
+      expected_version:
+        description: Expected application version in SOURCE.json and --version
+        required: true
+        default: 1.1.1
+        type: string
+      release_state:
+        description: Expected published release state
+        required: true
+        default: prerelease
+        type: choice
+        options:
+          - prerelease
+          - release
       expected_sha256:
         description: Expected SHA-256 of JSONDictionaryEditor-Windows-x64.zip
         required: true
@@ -29,18 +42,20 @@ jobs:
           GH_PROMPT_DISABLED: '1'
           PREVIEW_TAG: ${{ inputs.tag }}
           EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+          EXPECTED_RELEASE_STATE: ${{ inputs.release_state }}
         run: |
           $ErrorActionPreference = 'Stop'
           Set-StrictMode -Version Latest
           $assetName = 'JSONDictionaryEditor-Windows-x64.zip'
           $scratch = Join-Path $env:RUNNER_TEMP ('json-dictionary-preview-' + [guid]::NewGuid().ToString('N'))
           $summary = [System.Collections.Generic.List[string]]::new()
-          $summary.Add('# Windows x64 preview CLI verification')
+          $summary.Add('# Windows x64 release CLI verification')
           $summary.Add('')
           $summary.Add("Repository: $env:GITHUB_REPOSITORY")
           $summary.Add("Run: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID (attempt $env:GITHUB_RUN_ATTEMPT)")
           $summary.Add('')
-          $summary.Add('This job checks the released x64 executable and CLI diagnostics only. It does not validate ARM64, GUI appearance, the 1.0.1 splitter fix, IME, DPI, or complete GUI acceptance.')
+          $summary.Add('This job checks the released x64 executable and CLI diagnostics only. It does not validate ARM64, GUI appearance, splitter rendering, IME, DPI, or complete GUI acceptance.')
 
           try {
             # Keep all dispatch inputs in environment variables, outside script syntax.
@@ -50,6 +65,12 @@ jobs:
             if ($env:EXPECTED_SHA256 -cnotmatch '^[A-Fa-f0-9]{64}$') {
               throw 'expected_sha256 must contain exactly 64 hexadecimal characters.'
             }
+            if ($env:EXPECTED_VERSION -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+              throw 'expected_version must be a three-component numeric version.'
+            }
+            if ($env:EXPECTED_RELEASE_STATE -cnotin @('prerelease', 'release')) {
+              throw 'release_state must be prerelease or release.'
+            }
             $expectedHash = $env:EXPECTED_SHA256.ToLowerInvariant()
             $os = Get-CimInstance -ClassName Win32_OperatingSystem
             $summary.Add('')
@@ -57,14 +78,17 @@ jobs:
             $summary.Add("Runner: $env:RUNNER_OS / $env:RUNNER_ARCH; image $env:ImageOS / $env:ImageVersion")
             $summary.Add("PowerShell: $($PSVersionTable.PSVersion)")
             $summary.Add("Tag: $env:PREVIEW_TAG")
+            $summary.Add("Expected version: $env:EXPECTED_VERSION; state: $env:EXPECTED_RELEASE_STATE")
             $summary.Add("Expected ZIP SHA-256: $expectedHash")
             New-Item -ItemType Directory -Path $scratch | Out-Null
 
             $releaseJson = & gh release view $env:PREVIEW_TAG --repo $env:GITHUB_REPOSITORY --json tagName,isPrerelease,isDraft,assets
             if ($LASTEXITCODE -ne 0) { throw 'Could not read the prerelease from this repository.' }
             $release = $releaseJson | ConvertFrom-Json
-            if ($release.tagName -cne $env:PREVIEW_TAG -or -not $release.isPrerelease -or $release.isDraft) {
-              throw 'The selected release must be a published prerelease with the requested tag (the repository may remain private).'
+            $expectPrerelease = $env:EXPECTED_RELEASE_STATE -ceq 'prerelease'
+            if ($release.tagName -cne $env:PREVIEW_TAG -or
+                $release.isPrerelease -ne $expectPrerelease -or $release.isDraft) {
+              throw 'The selected release must be published with the requested tag and release state.'
             }
             $matchingAssets = @($release.assets | Where-Object { $_.name -ceq $assetName })
             if ($matchingAssets.Count -ne 1) { throw "Expected exactly one release asset named $assetName." }
@@ -88,9 +112,9 @@ jobs:
             $source = Get-Content -LiteralPath (Join-Path $package 'SOURCE.json') -Raw -Encoding utf8 | ConvertFrom-Json
             if ($source.source_commit -cnotmatch '^[a-fA-F0-9]{40}$' -or
                 $source.tag -cne $env:PREVIEW_TAG -or
-                $source.app_version -cne '1.0.1' -or
+                $source.app_version -cne $env:EXPECTED_VERSION -or
                 $source.architecture -cne 'x64') {
-              throw 'SOURCE.json must identify a full source commit, the requested tag, app version 1.0.1, and architecture x64.'
+              throw 'SOURCE.json must identify a full source commit, the requested tag, expected app version, and architecture x64.'
             }
             $tagCommit = & gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:PREVIEW_TAG" --jq '.sha'
             if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the release tag to a source commit.' }
@@ -124,7 +148,8 @@ jobs:
             $utf8 = [System.Text.UTF8Encoding]::new($false)
             [System.IO.File]::WriteAllText($validPath, '{"text":"中文🙂","number":1e3,"array":[true,null,{"key":"value"}]}', $utf8)
             [System.IO.File]::WriteAllText($invalidPath, '{"duplicate":1,"duplicate":2}', $utf8)
-            Invoke-Diagnostic -Name 'version' -Arguments @('--version') -ExpectedExit 0 -ExpectedOutput '^JSON Dictionary Editor for Windows 1\.0\.1\s*$'
+            $versionPattern = '^JSON Dictionary Editor for Windows ' + [regex]::Escape($env:EXPECTED_VERSION) + '\s*$'
+            Invoke-Diagnostic -Name 'version' -Arguments @('--version') -ExpectedExit 0 -ExpectedOutput $versionPattern
             # Includes Win32 atomic file round-trip and stale-identity/overwrite protection.
             Invoke-Diagnostic -Name 'self-test' -Arguments @('--self-test') -ExpectedExit 0 -ExpectedOutput 'SELF_TEST_OK:'
             Invoke-Diagnostic -Name 'valid-json' -Arguments @('--validate-json', "`"$validPath`"") -ExpectedExit 0 -ExpectedOutput 'VALID_JSON_DICTIONARY:'

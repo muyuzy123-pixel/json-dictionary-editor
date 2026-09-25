@@ -104,24 +104,42 @@ enum class ErrorCode {
     RootMustBeObject,
 };
 
+enum class ErrorReason {
+    Unknown,
+    InputNotUtf8, Empty, TrailingContent, MissingValue, TooManyNodes,
+    UnrecognizedValue, TooDeep, ExpectedObjectOpen, QuotedKey,
+    DuplicateKey, ExpectedColon, ExpectedObjectComma, ExpectedArrayOpen,
+    ExpectedArrayComma, UnicodeIncomplete, UnicodeHex, OpeningQuote,
+    StringEscapeIncomplete, HighSurrogate, InvalidLowSurrogate,
+    IsolatedLowSurrogate, UnsupportedEscape, ControlCharacter,
+    UnterminatedString, InvalidNumber, InvalidLiteral, LiteralSuffix,
+    StringNotUtf8, KeyNotUtf8, RootObject,
+};
+
 class Error : public std::runtime_error {
 public:
     Error(ErrorCode code,
           std::string message,
           std::size_t line = 0,
           std::size_t column = 0,
-          std::string path = {});
+          std::string path = {},
+          ErrorReason reason = ErrorReason::Unknown,
+          std::string argument = {});
 
     ErrorCode code() const noexcept { return code_; }
     std::size_t line() const noexcept { return line_; }
     std::size_t column() const noexcept { return column_; }
     const std::string& path() const noexcept { return path_; }
+    ErrorReason reason() const noexcept { return reason_; }
+    const std::string& argument() const noexcept { return argument_; }
 
 private:
     ErrorCode code_;
     std::size_t line_;
     std::size_t column_;
     std::string path_;
+    ErrorReason reason_;
+    std::string argument_;
 };
 
 bool is_valid_utf8(std::string_view text) noexcept;

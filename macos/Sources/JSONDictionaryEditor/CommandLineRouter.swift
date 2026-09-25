@@ -11,13 +11,17 @@ enum CommandLineRouter {
             exit(SelfTest.run())
         case "--validate-json":
             guard arguments.count == 3 else {
-                fputs("用法：JSONDictionaryEditor --validate-json <文件路径>\n", stderr)
+                fputs((LanguageStore.shared.effectiveIdentifier == "en"
+                    ? "Usage: JSONDictionaryEditor --validate-json <file-path>\n"
+                    : "用法：JSONDictionaryEditor --validate-json <文件路径>\n"), stderr)
                 exit(2)
             }
             exit(validateFile(at: arguments[2]))
         case "--generate-icon":
             guard arguments.count == 3 else {
-                fputs("用法：JSONDictionaryEditor --generate-icon <输出.icns>\n", stderr)
+                fputs((LanguageStore.shared.effectiveIdentifier == "en"
+                    ? "Usage: JSONDictionaryEditor --generate-icon <output.icns>\n"
+                    : "用法：JSONDictionaryEditor --generate-icon <输出.icns>\n"), stderr)
                 exit(2)
             }
             do {
@@ -29,17 +33,28 @@ enum CommandLineRouter {
                 exit(1)
             }
         case "--version":
-            print("JSON 字典编辑器 1.0.0 (1)")
+            print("JSON Dictionary Editor 1.1.1 (3)")
             exit(0)
         case "--help":
-            print("""
-            JSON 字典编辑器 1.0.0
+            if LanguageStore.shared.effectiveIdentifier == "en" {
+                print("""
+                JSON Dictionary Editor 1.1.1
 
-              --self-test              运行确定性核心自检
-              --validate-json <路径>   验证文件是否为有效 JSON 字典
-              --generate-icon <路径>   生成应用 ICNS 图标
-              --version                显示版本
-            """)
+                  --self-test              run deterministic core self-tests
+                  --validate-json <path>   validate a UTF-8 JSON dictionary
+                  --generate-icon <path>   generate the application ICNS icon
+                  --version                display version
+                """)
+            } else {
+                print("""
+                JSON 字典编辑器 1.1.1
+
+                  --self-test              运行确定性核心自检
+                  --validate-json <路径>   验证文件是否为有效 JSON 字典
+                  --generate-icon <路径>   生成应用 ICNS 图标
+                  --version                显示版本
+                """)
+            }
             exit(0)
         default:
             return

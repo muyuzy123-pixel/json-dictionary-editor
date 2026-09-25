@@ -12,6 +12,8 @@ Build-tool archive SHA-256:
 
 The static Windows build uses LLVM libc++ (including libc++abi members),
 libunwind, compiler-rt builtins, and the MinGW-w64 startup/runtime libraries.
+The 1.1.1 build also loads MinGW-w64 libuuid.a for Windows GUID definitions;
+its applicable declarations are retained with the MinGW-w64 runtime notice.
 Their code can be included in the executable even though the build tools
 and SDK are not included in the download.
 

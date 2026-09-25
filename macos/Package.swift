@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "JSONDictionaryEditor",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v13)
     ],
@@ -13,7 +14,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "JSONDictionaryEditor",
-            path: "Sources/JSONDictionaryEditor"
+            path: "Sources/JSONDictionaryEditor",
+            resources: [.process("Resources")]
         )
     ]
 )

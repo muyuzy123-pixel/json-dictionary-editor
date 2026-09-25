@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 
 try {
     $ProjectDir = Split-Path -Parent $PSScriptRoot
+    & (Join-Path $PSScriptRoot 'verify_localizations.ps1')
     if ([string]::IsNullOrWhiteSpace($BuildDir)) {
         $BuildDir = Join-Path $ProjectDir ('build-windows-' + $Architecture.ToLowerInvariant())
     }

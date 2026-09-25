@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JSONDictionaryEditorWindows VERSION 1.0.1 LANGUAGES CXX)
+project(JSONDictionaryEditorWindows VERSION 1.1.1 LANGUAGES CXX)
 option(JDE_BUILD_GUI "Build the native Windows application" ${WIN32})
 
 if(JDE_BUILD_GUI)
@@ -19,7 +19,7 @@ if(JDE_BUILD_GUI)
         UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00
     )
     target_link_libraries(JSONDictionaryEditor PRIVATE
-        bcrypt comctl32 comdlg32 shell32 ole32 uxtheme gdi32 user32
+        bcrypt comctl32 comdlg32 shell32 ole32 uxtheme gdi32 user32 uuid
     )
     if(MSVC)
         target_compile_options(JSONDictionaryEditor PRIVATE /utf-8 /W4 /permissive-)

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NodeInspectorView: View {
     @Binding var document: JSONDictionaryDocument
+    @EnvironmentObject private var language: LanguageStore
     let nodeID: UUID
     let onAdd: (JSONKind) -> Void
     let onEditRaw: () -> Void
@@ -15,6 +16,7 @@ struct NodeInspectorView: View {
     private var isRoot: Bool { nodeID == document.root.id }
 
     var body: some View {
+        let _ = language.preference
         ScrollView {
             if let node {
                 VStack(alignment: .leading, spacing: 18) {
@@ -23,12 +25,12 @@ struct NodeInspectorView: View {
                     Divider()
 
                     if isRoot {
-                        LabeledContent("节点", value: "根对象（字典）")
+                        LabeledContent(tr("节点"), value: tr("根对象（字典）"))
                     } else if location?.isObjectMember == true {
                         ValidatedKeyField(document: $document, nodeID: nodeID)
                             .id("key-\(nodeID)")
                     } else if let index = location?.index {
-                        LabeledContent("数组索引", value: "[\(index)]")
+                        LabeledContent(tr("数组索引"), value: "[\(index)]")
                     }
 
                     typePicker(for: node)
@@ -44,21 +46,21 @@ struct NodeInspectorView: View {
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text("未选择节点")
+                Text(tr("未选择节点"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(40)
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .alert("更改类型会移除子项", isPresented: $showsKindConfirmation) {
-            Button("取消", role: .cancel) { pendingKind = nil }
-            Button("更改", role: .destructive) {
+        .alert(tr("更改类型会移除子项"), isPresented: $showsKindConfirmation) {
+            Button(tr("取消"), role: .cancel) { pendingKind = nil }
+            Button(tr("更改"), role: .destructive) {
                 if let kind = pendingKind { _ = document.changeKind(of: nodeID, to: kind) }
                 pendingKind = nil
             }
         } message: {
-            Text("所选对象或数组当前包含子项。更改为其他类型后，这些子项将被移除。")
+            Text(tr("所选对象或数组当前包含子项。更改为其他类型后，这些子项将被移除。"))
         }
     }
 
@@ -74,7 +76,7 @@ struct NodeInspectorView: View {
             .frame(width: 42, height: 42)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(isRoot ? "根对象" : (location?.key ?? location.map { "[\($0.index ?? 0)]" } ?? "节点"))
+                Text(isRoot ? tr("根对象") : (location?.key ?? location.map { "[\($0.index ?? 0)]" } ?? tr("节点")))
                     .font(.title3.weight(.semibold))
                     .lineLimit(1)
                 Text(node.kind.title)
@@ -85,13 +87,13 @@ struct NodeInspectorView: View {
             Spacer()
 
             Menu {
-                Button("编辑原始 JSON…", action: onEditRaw)
+                Button(tr("编辑原始 JSON…"), action: onEditRaw)
                 if case .object = node.value {
-                    Button("按键名排序") { _ = document.sortObject(at: nodeID) }
+                    Button(tr("按键名排序")) { _ = document.sortObject(at: nodeID) }
                 }
                 if !isRoot {
                     Divider()
-                    Button("删除", role: .destructive, action: onDelete)
+                    Button(tr("删除"), role: .destructive, action: onDelete)
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -104,10 +106,10 @@ struct NodeInspectorView: View {
 
     private func typePicker(for node: JSONNode) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("值类型")
+            Text(tr("值类型"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Picker("值类型", selection: Binding(
+            Picker(tr("值类型"), selection: Binding(
                 get: { node.kind },
                 set: { requested in requestKindChange(from: node, to: requested) }
             )) {
@@ -119,7 +121,7 @@ struct NodeInspectorView: View {
             .disabled(isRoot)
 
             if isRoot {
-                Text("JSON 字典的根节点固定为对象。")
+                Text(tr("JSON 字典的根节点固定为对象。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -136,10 +138,10 @@ struct NodeInspectorView: View {
                 .id("number-\(nodeID)")
         case .boolean(let value):
             VStack(alignment: .leading, spacing: 8) {
-                Text("布尔值")
+                Text(tr("布尔值"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Toggle(value ? "True（真）" : "False（假）", isOn: Binding(
+                Toggle(tr(value ? "True（真）" : "False（假）"), isOn: Binding(
                     get: { value },
                     set: { _ = document.setBoolean($0, for: nodeID) }
                 ))
@@ -147,22 +149,28 @@ struct NodeInspectorView: View {
             }
         case .null:
             VStack(alignment: .leading, spacing: 10) {
-                Label("此值为空（null）", systemImage: "nosign")
+                Label(tr("此值为空（null）"), systemImage: "nosign")
                     .foregroundStyle(.secondary)
-                Text("Null 与空字符串、数字 0 和 false 不相同。")
+                Text(tr("Null 与空字符串、数字 0 和 false 不相同。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         case .object(let members):
             containerEditor(
-                title: members.isEmpty ? "空对象" : "包含 \(members.count) 个键",
-                explanation: "对象中的每个子项都有唯一键名。",
+                title: members.isEmpty ? tr("空对象") :
+                    (LanguageStore.shared.effectiveIdentifier == "zh-Hans"
+                        ? "包含 \(members.count) 个键"
+                        : "Contains \(LanguageStore.shared.count(members.count, one: "个键", other: "个键复数", chinese: "个键"))"),
+                explanation: tr("对象中的每个子项都有唯一键名。"),
                 isObject: true
             )
         case .array(let values):
             containerEditor(
-                title: values.isEmpty ? "空数组" : "包含 \(values.count) 个元素",
-                explanation: "数组元素按顺序保存，索引会随移动自动更新。",
+                title: values.isEmpty ? tr("空数组") :
+                    (LanguageStore.shared.effectiveIdentifier == "zh-Hans"
+                        ? "包含 \(values.count) 个元素"
+                        : "Contains \(LanguageStore.shared.count(values.count, one: "个元素", other: "个元素复数", chinese: "个元素"))"),
+                explanation: tr("数组元素按顺序保存，索引会随移动自动更新。"),
                 isObject: false
             )
         }
@@ -185,23 +193,23 @@ struct NodeInspectorView: View {
                     }
                 }
             } label: {
-                Label("添加子项", systemImage: "plus")
+                Label(tr("添加子项"), systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
 
-            Button("编辑此节点的原始 JSON…", action: onEditRaw)
+            Button(tr("编辑此节点的原始 JSON…"), action: onEditRaw)
                 .buttonStyle(.link)
         }
     }
 
     private func metadataSection(_ node: JSONNode) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("节点信息")
+            Text(tr("节点信息"))
                 .font(.headline)
 
             if let path = location?.path {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("JSON 路径")
+                    Text(tr("JSON 路径"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(path)
@@ -210,9 +218,9 @@ struct NodeInspectorView: View {
                 }
             }
 
-            LabeledContent("类型", value: node.kind.title)
+            LabeledContent(tr("类型"), value: node.kind.title)
             if node.isContainer {
-                LabeledContent("直接子项", value: "\(node.childCount)")
+                LabeledContent(tr("直接子项"), value: "\(node.childCount)")
             }
         }
     }
@@ -230,6 +238,7 @@ struct NodeInspectorView: View {
 
 private struct ValidatedKeyField: View {
     @Binding var document: JSONDictionaryDocument
+    @EnvironmentObject private var language: LanguageStore
     let nodeID: UUID
     @State private var draft: String
     @FocusState private var focused: Bool
@@ -249,23 +258,24 @@ private struct ValidatedKeyField: View {
     }
 
     var body: some View {
+        let _ = language.preference
         VStack(alignment: .leading, spacing: 7) {
-            Text("键名")
+            Text(tr("键名"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack {
-                TextField("键名", text: $draft)
+                TextField(tr("键名"), text: $draft)
                     .focused($focused)
                     .onSubmit(apply)
-                Button("应用", action: apply)
+                Button(tr("应用"), action: apply)
                     .disabled(!hasChanges || !isAvailable)
             }
             if !isAvailable {
-                Label("同一对象中已经存在此键名。", systemImage: "exclamationmark.triangle.fill")
+                Label(tr("同一对象中已经存在此键名。"), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
             } else if draft.isEmpty {
-                Text("空字符串可以作为 JSON 键，但通常不便于维护。")
+                Text(tr("空字符串可以作为 JSON 键，但通常不便于维护。"))
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -280,11 +290,13 @@ private struct ValidatedKeyField: View {
 
 private struct StringValueEditor: View {
     @Binding var document: JSONDictionaryDocument
+    @EnvironmentObject private var language: LanguageStore
     let nodeID: UUID
 
     var body: some View {
+        let _ = language.preference
         VStack(alignment: .leading, spacing: 7) {
-            Text("字符串值")
+            Text(tr("字符串值"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             TextEditor(text: Binding(
@@ -303,7 +315,7 @@ private struct StringValueEditor: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
             }
-            Text("换行、引号和反斜杠会在保存时自动转义。")
+            Text(tr("换行、引号和反斜杠会在保存时自动转义。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -312,6 +324,7 @@ private struct StringValueEditor: View {
 
 private struct ValidatedNumberField: View {
     @Binding var document: JSONDictionaryDocument
+    @EnvironmentObject private var language: LanguageStore
     let nodeID: UUID
     @State private var draft: String
 
@@ -324,23 +337,24 @@ private struct ValidatedNumberField: View {
     private var isValid: Bool { JSONNumberValidator.isValid(draft) }
 
     var body: some View {
+        let _ = language.preference
         VStack(alignment: .leading, spacing: 7) {
-            Text("数字值")
+            Text(tr("数字值"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack {
-                TextField("例如 42、-1.5 或 6.02e23", text: $draft)
+                TextField(tr("例如 42、-1.5 或 6.02e23"), text: $draft)
                     .font(.system(.body, design: .monospaced))
                     .onSubmit(apply)
-                Button("应用", action: apply)
+                Button(tr("应用"), action: apply)
                     .disabled(!isValid || currentValue == draft)
             }
             if !isValid {
-                Label("请输入有效的 JSON 数字；不支持 NaN、Infinity 或前导零。", systemImage: "exclamationmark.triangle.fill")
+                Label(tr("请输入有效的 JSON 数字；不支持 NaN、Infinity 或前导零。"), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
             } else {
-                Text("数字会原样保存，不会因浮点转换而丢失精度。")
+                Text(tr("数字会原样保存，不会因浮点转换而丢失精度。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -10,7 +10,7 @@ enum JSONKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var localizationKey: String {
         switch self {
         case .string: return "字符串"
         case .number: return "数字"
@@ -21,14 +21,25 @@ enum JSONKind: String, CaseIterable, Identifiable {
         }
     }
 
+    var title: String {
+        switch self {
+        case .string: return tr("字符串")
+        case .number: return tr("数字")
+        case .boolean: return tr("布尔值")
+        case .null: return "Null"
+        case .object: return tr("对象")
+        case .array: return tr("数组")
+        }
+    }
+
     var shortTitle: String {
         switch self {
-        case .string: return "文本"
-        case .number: return "数字"
-        case .boolean: return "布尔"
+        case .string: return tr("文本")
+        case .number: return tr("数字")
+        case .boolean: return tr("布尔")
         case .null: return "Null"
-        case .object: return "对象"
-        case .array: return "数组"
+        case .object: return tr("对象")
+        case .array: return tr("数组")
         }
     }
 
@@ -97,9 +108,11 @@ struct JSONNode: Identifiable, Equatable {
         case .null:
             return "null"
         case .object(let members):
-            return members.isEmpty ? "空对象" : "\(members.count) 个键"
+            return members.isEmpty ? tr("空对象") :
+                LanguageStore.shared.count(members.count, one: "个键", other: "个键复数", chinese: "个键")
         case .array(let values):
-            return values.isEmpty ? "空数组" : "\(values.count) 个元素"
+            return values.isEmpty ? tr("空数组") :
+                LanguageStore.shared.count(values.count, one: "个元素", other: "个元素复数", chinese: "个元素")
         }
     }
 
@@ -142,10 +155,10 @@ enum JSONFormatting: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .twoSpaces: return "2 个空格"
-        case .fourSpaces: return "4 个空格"
-        case .tabs: return "制表符"
-        case .compact: return "紧凑"
+        case .twoSpaces: return tr("2 个空格")
+        case .fourSpaces: return tr("4 个空格")
+        case .tabs: return tr("制表符")
+        case .compact: return tr("紧凑")
         }
     }
 
@@ -194,8 +207,31 @@ struct JSONFlatRow: Identifiable, Equatable {
     var id: UUID { node.id }
 }
 
+enum JSONParseIssue: Equatable {
+    case message(String)
+    case duplicateKey(String)
+    case invalidNumber(String)
+    case expectedLiteral(String)
+    case invalidLiteralSuffix(String)
+
+    var description: String {
+        let english = LanguageStore.shared.effectiveIdentifier == "en"
+        switch self {
+        case .message(let key): return tr(key)
+        case .duplicateKey(let key):
+            return english ? "Duplicate object key: \(key)" : "对象中存在重复键“\(key)”"
+        case .invalidNumber(let value):
+            return english ? "Invalid JSON number: \(value)" : "“\(value)”不是有效的 JSON 数字"
+        case .expectedLiteral(let value):
+            return english ? "Invalid literal; expected \(value)" : "无效的字面量，预期为 \(value)"
+        case .invalidLiteralSuffix(let value):
+            return english ? "Invalid character after literal \(value)" : "字面量 \(value) 后包含无效字符"
+        }
+    }
+}
+
 enum JSONModelError: LocalizedError, Equatable {
-    case parse(message: String, line: Int, column: Int)
+    case parse(issue: JSONParseIssue, line: Int, column: Int)
     case rootMustBeObject
     case invalidNumber(String)
     case duplicateKey(String, path: String)
@@ -204,18 +240,24 @@ enum JSONModelError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .parse(let message, let line, let column):
-            return "第 \(line) 行、第 \(column) 列：\(message)"
+        case .parse(let issue, let line, let column):
+            return LanguageStore.shared.effectiveIdentifier == "zh-Hans"
+                ? "第 \(line) 行、第 \(column) 列：\(issue.description)"
+                : "Line \(line), column \(column): \(issue.description)"
         case .rootMustBeObject:
-            return "JSON 根节点必须是对象（字典），不能是数组或标量。"
+            return tr("JSON 根节点必须是对象（字典），不能是数组或标量。")
         case .invalidNumber(let value):
-            return "“\(value)”不是有效的 JSON 数字。"
+            return LanguageStore.shared.effectiveIdentifier == "zh-Hans"
+                ? "“\(value)”不是有效的 JSON 数字。"
+                : "“\(value)” is not a valid JSON number."
         case .duplicateKey(let key, let path):
-            return "\(path) 中存在重复键“\(key)”。"
+            return LanguageStore.shared.effectiveIdentifier == "zh-Hans"
+                ? "\(path) 中存在重复键“\(key)”。"
+                : "Duplicate key “\(key)” at \(path)."
         case .invalidUTF8:
-            return "文件不是有效的 UTF-8 文本。"
+            return tr("文件不是有效的 UTF-8 文本。")
         case .fileHasNoData:
-            return "文件没有可读取的数据。"
+            return tr("文件没有可读取的数据。")
         }
     }
 }

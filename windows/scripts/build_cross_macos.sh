@@ -35,6 +35,7 @@ if [ -n "${LLVM_MINGW_ARCHIVE:-}" ] && [ ! -f "$LLVM_MINGW_ARCHIVE" ]; then
     echo "LLVM_MINGW_ARCHIVE does not name a file." >&2
     exit 2
 fi
+python3 "$PROJECT_DIR/scripts/verify_localizations.py"
 mkdir -p "$BUILD_DIR" "$DIST_DIR"
 BUILD_DIR=$(CDPATH= cd -- "$BUILD_DIR" && pwd)
 DIST_DIR=$(CDPATH= cd -- "$DIST_DIR" && pwd)
@@ -46,13 +47,15 @@ INPUTS="$BUILD_DIR/build-inputs.sha256"
     cd "$REPO_ROOT"
     shasum -a 256 windows/src/*.cpp windows/src/*.hpp \
         windows/resources/app.rc windows/resources/app.manifest windows/resources/app.ico \
-        windows/resources/SampleDictionary.json windows/README.md \
+        windows/resources/SampleDictionary.json windows/README.md windows/README.en.md \
         windows/scripts/build_cross_macos.sh windows/scripts/package_preview.sh \
-        windows/scripts/verify_on_windows.ps1 LICENSE THIRD_PARTY_NOTICES.txt \
+        windows/scripts/verify_on_windows.ps1 \
+        windows/scripts/verify_localizations.py windows/scripts/verify_localizations.ps1 \
+        windows/CMakeLists.txt LICENSE THIRD_PARTY_NOTICES.txt \
         licenses/LLVM-LICENSE.TXT licenses/COPYING.MinGW-w64-runtime.txt
 ) > "$INPUTS"
 input_digest=$(shasum -a 256 "$INPUTS")
-printf 'project_version=1.0.1\narchitectures=%s\n' "$ARCHS" > "$METADATA"
+printf 'project_version=1.1.1\narchitectures=%s\n' "$ARCHS" > "$METADATA"
 printf 'source_commit=%s\ninputs_sha256=%s\n' "${SOURCE_COMMIT:-not supplied}" "${input_digest%% *}" >> "$METADATA"
 if [ -n "${LLVM_MINGW_ARCHIVE:-}" ]; then
     archive_digest=$(shasum -a 256 "$LLVM_MINGW_ARCHIVE")
@@ -97,7 +100,7 @@ build_target() {
         "$PROJECT_DIR/src/json_core.cpp" "$PROJECT_DIR/src/windows_app.cpp" "$resource" \
         -o "$temporary" -mwindows -municode -static -static-libgcc -static-libstdc++ \
         "-Wl,-Map,$link_map" -Wl,--verbose -Wl,--gc-sections -lbcrypt -lcomctl32 -lcomdlg32 -lshell32 -lole32 \
-        -luxtheme -lgdi32 -luser32 > "$link_trace" 2>&1
+        -luxtheme -lgdi32 -luser32 -luuid > "$link_trace" 2>&1
     "$TOOLCHAIN/bin/llvm-strip" "$temporary"
     mv -f "$temporary" "$output"
     trace_digest=$(shasum -a 256 "$link_trace")

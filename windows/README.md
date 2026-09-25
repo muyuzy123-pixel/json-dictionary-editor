@@ -1,18 +1,24 @@
-# JSON 字典编辑器（Windows 版，开源候选）
+# JSON 字典编辑器 · Windows 1.1.1 本地候选
 
 这是一个原生 Win32 图形化 JSON 字典编辑器。程序用于在树形界面中安全地查看和修改 JSON 对象，同时保留对象键顺序和数字的原始文本；不会把高精度数字先转换为浮点数，也不会把重复键静默覆盖。
 
-保留版本 1.0.1（2026-09-20）的既有实现。该版本已加入分隔条 `SS_OWNERDRAW` 绘制、10 DIP 命中宽度、拖动与键盘调节；**修复后的真实 Windows 视觉与交互确认仍未完成**。源码、核心测试及交叉编译不能证明显示效果已经通过。
+1.1.0 加入简体中文、英文及跟随系统的界面切换；1.1.1 修复非空容器误匹配空对象/数组搜索、校验英文文案，并改用英文示例。语言切换行为不变。**分隔条修复已存在于 `preview-1` 的 Windows 1.0.1 中，不是本次新修复。** 其真实 Windows 视觉与交互确认仍未完成。
+
+本页描述尚未远端发布的 1.1.1 本地候选。[preview-1](https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/tag/preview-1) 仍提供历史 Windows 1.0.1 下载。新版实际构建和验收结果见[1.1.1 发布记录](../docs/releases/1.1.1.md)。[English guide](README.en.md) 说明相同产品操作。
 
 源码不含编译产物、缓存、工具链或原始录像。预览 ZIP 提供对应架构程序、合成样例、许可和验证脚本；实际发布状态见[发布记录](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/PREVIEW_RELEASE.md)。Windows 预览程序没有 Authenticode 签名。
 
+## 双语界面
+
+主窗口和原始 JSON 编辑器的“语言 / Language”菜单提供“跟随系统 / System”“简体中文”“English”。首次启动随 Windows 界面语言；手动选择记在当前用户的 `%LOCALAPPDATA%\JSONDictionaryEditor\settings.ini`，切换时不提交检查器草稿、不保存文档、不替换原始 JSON 文本。文件选择窗口随 Windows 语言。英文/中文界面展示的键名、值、路径和诊断内容与实际文件数据严格分开。
+
 ## 使用预览包
 
-在发布页选择 x64 或 ARM64 ZIP，核对 SHA-256 后解压到可写目录，双击 `JSONDictionaryEditor.exe`，通过“文件 → 打开”选择 `SampleDictionary.json` 的副本。版本、架构与源码归属写在 `SOURCE.json`；包内包含 MIT、第三方声明和对应许可全文。未知发布者/SmartScreen 提示不能由 SHA 校验消除；不要关闭全局安全设置。
+获得对应版本的 x64 或 ARM64 ZIP 后，先核对 SHA-256，再解压到可写目录，双击 `JSONDictionaryEditor.exe`，通过“文件 → 打开”选择 `SampleDictionary.json` 的副本。版本、架构与源码归属写在 `SOURCE.json`；包内包含中文/英文说明、MIT、第三方声明和对应许可全文。未知发布者/SmartScreen 提示不能由 SHA 校验消除；不要关闭全局安全设置。
 
 ## 图标与许可
 
-项目自有内容采用根目录标准 MIT，版权署名为 `muyuzy123-pixel`。本候选的 `resources/app.ico` 已替换为可由项目源码生成的七档资源，沿用 Mac 图标的几何设计；生成器和 ICO 输出均适用项目 MIT。普通 Windows 构建直接使用此 ICO，不要求 macOS、Swift 或 AppKit。可选维护步骤及第三方边界见 [图标生成说明](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/icon-generation.md) 与 [许可说明](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/licensing.md)。
+项目自有内容采用根目录标准 MIT，版权署名为 `muyuzy123-pixel`。本候选的 `resources/app.ico` 已替换为可由项目源码生成的七档资源，沿用 Mac 图标的几何设计；生成器和 ICO 输出均适用项目 MIT。普通 Windows 构建直接使用此 ICO，不要求 macOS、Swift 或 AppKit；本次图标字节保持不变。可选维护步骤及第三方边界见 [图标生成说明](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/icon-generation.md) 与 [许可说明](https://github.com/muyuzy123-pixel/json-dictionary-editor/blob/main/docs/licensing.md)。
 
 ## 目标平台与产物
 
@@ -166,9 +172,9 @@ ctest --test-dir build-core-cmake --output-on-failure
 
 ## 验证状态与边界
 
-- **本轮已执行**：见仓库根目录验证报告及摘要；仅报告本轮实际命令结果，不能扩大为 GUI 验收。
+- **1.1.1 本轮已执行**：见[1.1.1 发布记录](../docs/releases/1.1.1.md)；核心、语言静态检查与两架构交叉编译结果均按本次提交列示，不扩大为 GUI 验收。
 - **历史记录**：既有交付记录称核心优化与 ASan/UBSan 各通过 82 项断言、双架构 LLVM-MinGW 交叉编译成功。1.0.1 修复目录保有空诊断数组的 Clang 静态分析输出；这属于代码分析记录，不是 Windows 显示结果。
-- **未验证**：原生 Visual Studio 构建、Windows ARM64 实机、原生文件对话框、拖放、中文输入法、DPI、多显示器、高对比度、SmartScreen/Defender，以及 1.0.1 分隔条修复后的视觉和交互。最终 x64 包的 CLI 和内置文件自测由单独 Windows CI 检查，实际状态以发布记录为准；CI 不调用启动窗口的 `verify_on_windows.ps1`。
+- **未验证**：原生 Visual Studio 构建、Windows ARM64 实机、原生文件对话框、拖放、中文输入法、DPI、多显示器、高对比度、SmartScreen/Defender，以及 1.0.1 分隔条修复后的视觉和交互。1.1.1 最终 x64 包仍需在后续授权上传后由附件 CI 检查 CLI 与内置文件自测；本次本地准备不能借用旧版 CI 通过记录。附件 CI 不调用启动窗口的 `verify_on_windows.ps1`。
 - **计划支持、待验收**：Windows 10/11 x64 与 ARM64；Linux 仅有便携核心测试路径，不提供 GUI。
 
 ## 当前边界

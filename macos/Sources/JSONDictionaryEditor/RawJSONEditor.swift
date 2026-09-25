@@ -5,9 +5,40 @@ struct RawJSONEditorSheet: View {
     let nodeID: UUID
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var language: LanguageStore
     @State private var draft: String
-    @State private var validationMessage = "尚未检查"
-    @State private var validationSucceeded = false
+    @State private var status = RawStatus.unchecked
+
+    private enum RawStatus {
+        case unchecked
+        case edited
+        case valid(JSONKind, Int)
+        case formatted
+        case failure(Error)
+    }
+
+    private var validationSucceeded: Bool {
+        switch status {
+        case .valid, .formatted: return true
+        default: return false
+        }
+    }
+
+    private var validationMessage: String {
+        let _ = language.preference
+        switch status {
+        case .unchecked: return tr("尚未检查")
+        case .edited: return tr("内容已更改，尚未检查")
+        case .formatted: return tr("已格式化并通过检查")
+        case .failure(let error): return error.localizedDescription
+        case .valid(let kind, let count):
+            if language.effectiveIdentifier == "zh-Hans" {
+                return "有效的 \(kind.title) · \(count) 个节点"
+            }
+            return "Valid \(kind.title.lowercased()) · " +
+                language.count(count, one: "个节点", other: "个节点复数", chinese: "个节点")
+        }
+    }
 
     private var isRoot: Bool { nodeID == document.root.id }
 
@@ -20,6 +51,7 @@ struct RawJSONEditorSheet: View {
     }
 
     var body: some View {
+        let _ = language.preference
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 ZStack {
@@ -31,7 +63,7 @@ struct RawJSONEditorSheet: View {
                 .frame(width: 38, height: 38)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isRoot ? "编辑完整 JSON 字典" : "编辑所选节点的原始 JSON")
+                    Text(tr(isRoot ? "编辑完整 JSON 字典" : "编辑所选节点的原始 JSON"))
                         .font(.headline)
                     Text(document.location(of: nodeID)?.path ?? "$")
                         .font(.caption.monospaced())
@@ -49,8 +81,7 @@ struct RawJSONEditorSheet: View {
                 .padding(10)
                 .frame(minWidth: 660, minHeight: 420)
                 .onChange(of: draft) { _ in
-                    validationSucceeded = false
-                    validationMessage = "内容已更改，尚未检查"
+                    status = .edited
                 }
 
             Divider()
@@ -63,11 +94,11 @@ struct RawJSONEditorSheet: View {
 
                 Spacer()
 
-                Button("格式化") { formatDraft() }
-                Button("检查") { validateDraft() }
-                Button("取消", role: .cancel) { dismiss() }
+                Button(tr("格式化")) { formatDraft() }
+                Button(tr("检查")) { validateDraft() }
+                Button(tr("取消"), role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("应用") { applyDraft() }
+                Button(tr("应用")) { applyDraft() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             }
@@ -88,11 +119,9 @@ struct RawJSONEditorSheet: View {
     private func validateDraft() {
         do {
             let node = try parseDraft()
-            validationSucceeded = true
-            validationMessage = "有效的 \(node.kind.title) · \(countNodes(node)) 个节点"
+            status = .valid(node.kind, countNodes(node))
         } catch {
-            validationSucceeded = false
-            validationMessage = error.localizedDescription
+            status = .failure(error)
         }
     }
 
@@ -100,11 +129,9 @@ struct RawJSONEditorSheet: View {
         do {
             let node = try parseDraft()
             draft = try OrderedJSONWriter(formatting: .twoSpaces).encode(node)
-            validationSucceeded = true
-            validationMessage = "已格式化并通过检查"
+            status = .formatted
         } catch {
-            validationSucceeded = false
-            validationMessage = error.localizedDescription
+            status = .failure(error)
         }
     }
 
@@ -116,8 +143,7 @@ struct RawJSONEditorSheet: View {
             }
             dismiss()
         } catch {
-            validationSucceeded = false
-            validationMessage = error.localizedDescription
+            status = .failure(error)
         }
     }
 

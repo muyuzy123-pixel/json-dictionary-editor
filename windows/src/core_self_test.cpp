@@ -1,4 +1,5 @@
 #include "json_core.hpp"
+#include "json_search_aliases.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -90,6 +91,27 @@ void number_grammar_is_strict() {
            "invalid JSON number was accepted");
 }
 
+void search_aliases_respect_empty_containers() {
+    const Node filled_object = parse(R"({"x":1})");
+    const Node empty_object = parse("{}");
+    const Node filled_array = parse("[1]");
+    const Node empty_array = parse("[]");
+    auto has = [](const Node& node, std::wstring_view term) {
+        return search_aliases(node).find(term) != std::wstring::npos;
+    };
+    expect(!has(filled_object, L"empty object") && !has(filled_object, L"空对象"),
+           "nonempty object matched an empty-object alias");
+    expect(has(empty_object, L"empty object") && has(empty_object, L"空对象"),
+           "empty object did not match bilingual empty-object aliases");
+    expect(!has(filled_array, L"empty array") && !has(filled_array, L"空数组"),
+           "nonempty array matched an empty-array alias");
+    expect(has(empty_array, L"empty array") && has(empty_array, L"空数组"),
+           "empty array did not match bilingual empty-array aliases");
+    expect(has(filled_object, L"object") && has(empty_object, L"object") &&
+           has(filled_array, L"array") && has(empty_array, L"array"),
+           "ordinary type aliases were removed");
+}
+
 void malformed_inputs_are_rejected() {
     const std::vector<std::string> invalid = {
         R"({"a":1,"a":2})",
@@ -110,6 +132,22 @@ void malformed_inputs_are_rejected() {
         const ErrorCode expected = i < 2 ? ErrorCode::DuplicateKey : ErrorCode::Parse;
         expect_error([&] { (void)parse(invalid[i]); }, expected,
                      "malformed JSON was accepted: " + invalid[i]);
+    }
+    try {
+        (void)parse(R"({"a":1,"\u0061":2})");
+        throw std::runtime_error("structured duplicate-key error was not thrown");
+    } catch (const Error& error) {
+        expect(error.reason() == ErrorReason::DuplicateKey && error.argument() == "a",
+               "decoded duplicate key was not preserved in structured error");
+        expect(error.line() == 1 && error.column() > 0,
+               "structured duplicate-key location was lost");
+    }
+    try {
+        (void)parse(R"({"n":01})");
+        throw std::runtime_error("structured number error was not thrown");
+    } catch (const Error& error) {
+        expect(error.reason() == ErrorReason::InvalidNumber && error.argument() == "01",
+               "original invalid number was not preserved in structured error");
     }
 
     std::string invalid_utf8 = "{\"a\":\"";
@@ -298,6 +336,7 @@ int main() {
         parser_preserves_types_order_and_number_text();
         unicode_and_escapes_round_trip();
         number_grammar_is_strict();
+        search_aliases_respect_empty_containers();
         malformed_inputs_are_rejected();
         writer_formats_validates_and_round_trips();
         document_operations_remain_valid();

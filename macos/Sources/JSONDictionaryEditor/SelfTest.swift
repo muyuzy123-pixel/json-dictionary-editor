@@ -13,6 +13,8 @@ enum SelfTestFailure: LocalizedError {
 enum SelfTest {
     static func run() -> Int32 {
         do {
+            try localizedResourcesAreAvailable()
+            try languagePreferenceRoundTrips()
             try parserPreservesTypesAndOrder()
             try unicodeAndEscapesRoundTrip()
             try numberGrammarIsStrict()
@@ -28,6 +30,35 @@ enum SelfTest {
             fputs("SELF_TEST_FAILED: \(error.localizedDescription)\n", stderr)
             return 1
         }
+    }
+
+    private static func localizedResourcesAreAvailable() throws {
+        let language = LanguageStore.shared
+        try expect(language.hasTranslation("字符串", language: "en"),
+                   "English localization entry was not loaded")
+        try expect(language.hasTranslation("字符串", language: "zh-Hans"),
+                   "Simplified Chinese localization entry was not loaded")
+        try expect(language.text("字符串", language: "en") == "String",
+                   "English localization resource is unavailable")
+        try expect(language.text("字符串", language: "zh-Hans") == "字符串",
+                   "Simplified Chinese localization resource is unavailable")
+        try expect(!language.hasTranslation("__missing_localization_probe__", language: "zh-Hans"),
+                   "missing localization key was treated as loaded")
+    }
+
+    private static func languagePreferenceRoundTrips() throws {
+        try expect(LanguageStore.resolve(.system, systemLanguage: "zh-Hans") == "zh-Hans",
+                   "Chinese system preference did not resolve to Chinese")
+        try expect(LanguageStore.resolve(.english, systemLanguage: "zh-Hans") == "en",
+                   "manual English preference did not override Chinese system")
+        try expect(LanguageStore.resolve(.system, systemLanguage: "zh-Hans") == "zh-Hans",
+                   "returning to Chinese system preference kept English")
+        try expect(LanguageStore.resolve(.system, systemLanguage: "en-US") == "en",
+                   "English system preference did not resolve to English")
+        try expect(LanguageStore.resolve(.chinese, systemLanguage: "en-US") == "zh-Hans",
+                   "manual Chinese preference did not override English system")
+        try expect(LanguageStore.resolve(.system, systemLanguage: "en-US") == "en",
+                   "returning to English system preference kept Chinese")
     }
 
     private static func parserPreservesTypesAndOrder() throws {
@@ -155,6 +186,25 @@ enum SelfTest {
         try expect(rows.contains { $0.path == "$.items[0]" }, "数组路径错误")
         let matches = document.visibleRows(expanded: [], searchText: "dark")
         try expect(matches.count == 1 && matches[0].path == "$.settings.theme", "值搜索结果错误")
+
+        var containers = OrderedJSONParser(text:
+            #"{"filledObject":{"x":1},"emptyObject":{},"filledArray":[1],"emptyArray":[]}"#)
+        document.root = try containers.parse()
+        for (term, path) in [
+            ("empty object", "$.emptyObject"), ("空对象", "$.emptyObject"),
+            ("empty array", "$.emptyArray"), ("空数组", "$.emptyArray")
+        ] {
+            let hits = document.visibleRows(expanded: [], searchText: term)
+            try expect(hits.map(\.path) == [path], "空容器搜索误匹配非空容器：\(term)")
+        }
+        for (term, paths) in [
+            ("object", ["$.filledObject", "$.emptyObject"]),
+            ("array", ["$.filledArray", "$.emptyArray"])
+        ] {
+            let hits = document.visibleRows(expanded: [], searchText: term)
+            try expect(Set(hits.map(\.path)).isSuperset(of: paths),
+                       "普通类型别名丢失：\(term)")
+        }
     }
 
     private static func deepCopyRegeneratesIdentifiers() throws {

@@ -59,7 +59,7 @@ struct JSONDictionaryDocument: FileDocument {
     func allRows() -> [JSONFlatRow] {
         var rows = [JSONFlatRow(
             node: root,
-            name: "根对象",
+            name: tr("根对象"),
             path: "$",
             depth: 0,
             parentID: nil,
@@ -78,7 +78,24 @@ struct JSONDictionaryDocument: FileDocument {
                 row.name.lowercased().contains(query) ||
                 row.path.lowercased().contains(query) ||
                 row.node.kind.title.lowercased().contains(query) ||
-                row.node.summary.lowercased().contains(query)
+                LanguageStore.shared.text(row.node.kind.localizationKey, language: "en")
+                    .lowercased().contains(query) ||
+                LanguageStore.shared.text(row.node.kind.localizationKey, language: "zh-Hans")
+                    .lowercased().contains(query) ||
+                row.node.summary.lowercased().contains(query) ||
+                (row.node.isContainer && {
+                    let count = row.node.childCount
+                    let english = row.node.kind == .object
+                        ? "\(count) \(count == 1 ? "key" : "keys")"
+                        : "\(count) \(count == 1 ? "element" : "elements")"
+                    let chinese = "\(count) \(row.node.kind == .object ? "个键" : "个元素")"
+                    return english.contains(query) || chinese.contains(query)
+                }()) ||
+                (row.node.isContainer && row.node.childCount == 0 &&
+                    (LanguageStore.shared.text(row.node.kind == .object ? "空对象" : "空数组",
+                                               language: "en").lowercased().contains(query) ||
+                     LanguageStore.shared.text(row.node.kind == .object ? "空对象" : "空数组",
+                                               language: "zh-Hans").lowercased().contains(query)))
             }
         }
 

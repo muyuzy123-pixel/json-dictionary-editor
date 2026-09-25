@@ -4,6 +4,12 @@
 
 项目自有内容采用 [MIT](LICENSE)，Copyright © 2026 **muyuzy123-pixel**。第三方组件适用各自许可，见 [许可说明](docs/licensing.md) 和 [第三方声明](THIRD_PARTY_NOTICES.txt)。
 
+## 1.1.1 本地候选
+
+本工作分支正在增量合入 macOS/Windows 1.1.1：简体中文与英文界面、1.1.1 空容器搜索和中文资源自检修复，以及英文示例和说明。目标版本为 Mac **1.1.1 (3)**、Windows **1.1.1**。旧图标、许可与两个平台独立构建方式保留；语言切换行为不变。
+
+[1.1.1 候选记录](docs/releases/1.1.1.md) · [待审阅发行说明](docs/releases/1.1.1-notes.md)。该版本尚未推送、未创建远端标签或 Release；下方下载仍是历史 `preview-1`，不得拿其附件或 CI 作为 1.1.1 通过证据。
+
 ## 首次预览 `preview-1`
 
 `preview-1` 提供以下下载包；当前发布状态、实际验收及已知限制见 [发布记录](docs/PREVIEW_RELEASE.md)。

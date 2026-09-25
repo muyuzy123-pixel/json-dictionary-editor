@@ -69,6 +69,7 @@ require(version == field('project_version'), 'Windows resource and build version
 common = {
     'SampleDictionary.json': repo / 'windows/resources/SampleDictionary.json',
     '使用说明.md': repo / 'windows/README.md',
+    'README.en.md': repo / 'windows/README.en.md',
     'LICENSE': repo / 'LICENSE',
     'THIRD_PARTY_NOTICES.txt': repo / 'THIRD_PARTY_NOTICES.txt',
     'verify_on_windows.ps1': repo / 'windows/scripts/verify_on_windows.ps1',

@@ -28,6 +28,7 @@ fail() { print -u2 -- "$1"; exit 1; }
 [[ "$SOURCE_COMMIT" =~ '^[0-9a-f]{40}$' ]] || fail "SOURCE_COMMIT must be a full lowercase Git commit hash."
 [[ "$RELEASE_TAG" =~ '^[A-Za-z0-9][A-Za-z0-9._-]*$' ]] || fail "Invalid RELEASE_TAG."
 [[ -f "$PACKAGE_README" && -f "$REPO_ROOT/LICENSE" ]] || fail "README or repository LICENSE is missing."
+[[ -f "$SOURCE_ROOT/README.en.md" ]] || fail "English README is missing."
 [[ -f "$UNSIGNED_APP/Contents/MacOS/JSONDictionaryEditor" ]] || fail "Unsigned App is missing."
 [[ ! -e "$ZIP_OUTPUT" ]] || fail "Preview archive already exists; choose a new DIST_DIR."
 [[ ! -e "$PACKAGE_WORK_DIR" ]] || fail "PACKAGE_WORK_DIR already exists; choose a fresh staging directory."
@@ -65,8 +66,21 @@ install -m 644 "$UNSIGNED_APP/Contents/Resources/AppIcon.icns" "$STAGE/$APP_NAME
 cmp "$UNSIGNED_APP/Contents/MacOS/JSONDictionaryEditor" "$STAGE/$APP_NAME/Contents/MacOS/JSONDictionaryEditor"
 cmp "$UNSIGNED_APP/Contents/Info.plist" "$STAGE/$APP_NAME/Contents/Info.plist"
 cmp "$UNSIGNED_APP/Contents/Resources/AppIcon.icns" "$STAGE/$APP_NAME/Contents/Resources/AppIcon.icns"
+# Copy the localized application and nested catalogue resources from the
+# checked unsigned build. The source icon remains the fixed historical ICNS.
+for relative in \
+    Contents/Resources/en.lproj/InfoPlist.strings \
+    Contents/Resources/zh-Hans.lproj/InfoPlist.strings \
+    Contents/Resources/JSONDictionaryEditor_JSONDictionaryEditor.bundle/Info.plist \
+    Contents/Resources/JSONDictionaryEditor_JSONDictionaryEditor.bundle/en.lproj/Localizable.strings \
+    Contents/Resources/JSONDictionaryEditor_JSONDictionaryEditor.bundle/zh-hans.lproj/Localizable.strings; do
+    mkdir -p "$STAGE/$APP_NAME/${relative:h}"
+    install -m 644 "$UNSIGNED_APP/$relative" "$STAGE/$APP_NAME/$relative"
+    cmp "$UNSIGNED_APP/$relative" "$STAGE/$APP_NAME/$relative"
+done
 install -m 644 "$REPO_ROOT/LICENSE" "$STAGE/LICENSE"
 install -m 644 "$PACKAGE_README" "$STAGE/README.md"
+install -m 644 "$SOURCE_ROOT/README.en.md" "$STAGE/README.en.md"
 install -m 644 "$SOURCE_ROOT/Resources/SampleDictionary.json" "$STAGE/SampleDictionary.json"
 install -m 644 "$REPO_ROOT/LICENSE" "$STAGE/$APP_NAME/Contents/Resources/LICENSE"
 
@@ -75,7 +89,7 @@ version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIS
 build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
 bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")"
 copyright="$(/usr/libexec/PlistBuddy -c 'Print :NSHumanReadableCopyright' "$PLIST")"
-[[ "$version" == 1.0.0 && "$build_number" == 1 ]] || fail "Unexpected macOS application version."
+[[ "$version" == 1.1.1 && "$build_number" == 3 ]] || fail "Unexpected macOS application version."
 [[ "$bundle_id" == com.codex.JSONDictionaryEditor ]] || fail "Unexpected macOS bundle identifier."
 [[ "$copyright" == 'Copyright (c) 2026 muyuzy123-pixel' ]] || fail "Unexpected copyright statement."
 
@@ -163,8 +177,17 @@ cmp "$SOURCE_ROOT/Resources/Info.plist" "$FINAL_APP/Contents/Info.plist"
 cmp "$REPO_ROOT/LICENSE" "$EXTRACTED/LICENSE"
 cmp "$REPO_ROOT/LICENSE" "$FINAL_APP/Contents/Resources/LICENSE"
 cmp "$PACKAGE_README" "$EXTRACTED/README.md"
+cmp "$SOURCE_ROOT/README.en.md" "$EXTRACTED/README.en.md"
 cmp "$SOURCE_ROOT/Resources/SampleDictionary.json" "$EXTRACTED/SampleDictionary.json"
 cmp "$EXTRACTED/SOURCE.json" "$FINAL_APP/Contents/Resources/SOURCE.json"
+for relative in \
+    Contents/Resources/en.lproj/InfoPlist.strings \
+    Contents/Resources/zh-Hans.lproj/InfoPlist.strings \
+    Contents/Resources/JSONDictionaryEditor_JSONDictionaryEditor.bundle/Info.plist \
+    Contents/Resources/JSONDictionaryEditor_JSONDictionaryEditor.bundle/en.lproj/Localizable.strings \
+    Contents/Resources/JSONDictionaryEditor_JSONDictionaryEditor.bundle/zh-hans.lproj/Localizable.strings; do
+    cmp "$UNSIGNED_APP/$relative" "$FINAL_APP/$relative"
+done
 [[ "$(plutil -extract source_commit raw -o - "$EXTRACTED/SOURCE.json")" == "$SOURCE_COMMIT" ]]
 [[ "$(plutil -extract tag raw -o - "$EXTRACTED/SOURCE.json")" == "$RELEASE_TAG" ]]
 [[ "$(plutil -extract app_version raw -o - "$EXTRACTED/SOURCE.json")" == "$version" ]]
@@ -178,7 +201,7 @@ iconutil -c iconset "$FINAL_APP/Contents/Resources/AppIcon.icns" -o "$PACKAGE_WO
 for architecture in arm64 x86_64; do
     actual_version="$(/usr/bin/arch -"$architecture" "$FINAL_BINARY" --version)"
     print -r -- "$actual_version" > "$RUN_AUDIT/version-$architecture.txt"
-    [[ "$actual_version" == "JSON 字典编辑器 $version ($build_number)" ]] || fail "CLI version mismatch."
+    [[ "$actual_version" == "JSON Dictionary Editor $version ($build_number)" ]] || fail "CLI version mismatch."
     /usr/bin/arch -"$architecture" "$FINAL_BINARY" --self-test \
         2>&1 | tee "$RUN_AUDIT/self-test-$architecture.log"
     /usr/bin/arch -"$architecture" "$FINAL_BINARY" --validate-json "$EXTRACTED/SampleDictionary.json" \

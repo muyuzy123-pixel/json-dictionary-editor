@@ -43,6 +43,8 @@
 #include <vector>
 
 #include "json_core.hpp"
+#include "json_search_aliases.hpp"
+#include "localization.hpp"
 
 namespace {
 
@@ -84,6 +86,9 @@ enum CommandId : int {
     ID_VIEW_EXPAND_ALL = 250,
     ID_VIEW_COLLAPSE_ALL,
     ID_HELP_ABOUT = 280,
+    ID_LANGUAGE_SYSTEM = 290,
+    ID_LANGUAGE_CHINESE,
+    ID_LANGUAGE_ENGLISH,
 
     IDC_SEARCH = 1000,
     IDC_TREE,
@@ -231,7 +236,8 @@ std::wstring WindowsErrorMessage(DWORD code) {
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         nullptr, code, 0, reinterpret_cast<wchar_t*>(&buffer), 0, nullptr);
-    std::wstring result = length && buffer ? std::wstring(buffer, length) : L"未知系统错误";
+    std::wstring result = length && buffer ? std::wstring(buffer, length) :
+                          app_l10n::text(L"未知系统错误");
     if (buffer) LocalFree(buffer);
     while (!result.empty() && (result.back() == L'\r' || result.back() == L'\n')) {
         result.pop_back();
@@ -239,24 +245,138 @@ std::wstring WindowsErrorMessage(DWORD code) {
     return result;
 }
 
+std::wstring CoreErrorText(const jsondict::Error& error) {
+    if (app_l10n::english) return Utf8ToWide(error.what());
+    const std::wstring argument = Utf8ToWide(error.argument());
+    switch (error.reason()) {
+        case jsondict::ErrorReason::InputNotUtf8: return L"输入不是有效的 UTF-8";
+        case jsondict::ErrorReason::Empty: return L"JSON 内容为空";
+        case jsondict::ErrorReason::TrailingContent: return L"JSON 值结束后还有多余内容";
+        case jsondict::ErrorReason::MissingValue: return L"缺少 JSON 值";
+        case jsondict::ErrorReason::TooManyNodes: return L"JSON 超过 250000 个节点的解析安全上限";
+        case jsondict::ErrorReason::UnrecognizedValue: return L"无法识别的 JSON 值";
+        case jsondict::ErrorReason::TooDeep: return L"JSON 嵌套超过 512 层安全上限";
+        case jsondict::ErrorReason::ExpectedObjectOpen: return L"缺少“{”";
+        case jsondict::ErrorReason::QuotedKey: return L"对象键必须是双引号字符串";
+        case jsondict::ErrorReason::DuplicateKey: return L"重复的对象键：“" + argument + L"”";
+        case jsondict::ErrorReason::ExpectedColon: return L"对象键后缺少冒号";
+        case jsondict::ErrorReason::ExpectedObjectComma: return L"对象成员之间缺少逗号";
+        case jsondict::ErrorReason::ExpectedArrayOpen: return L"缺少“[”";
+        case jsondict::ErrorReason::ExpectedArrayComma: return L"数组元素之间缺少逗号";
+        case jsondict::ErrorReason::UnicodeIncomplete: return L"Unicode 转义不完整";
+        case jsondict::ErrorReason::UnicodeHex: return L"Unicode 转义必须包含四位十六进制数字";
+        case jsondict::ErrorReason::OpeningQuote: return L"缺少字符串起始引号";
+        case jsondict::ErrorReason::StringEscapeIncomplete: return L"字符串转义不完整";
+        case jsondict::ErrorReason::HighSurrogate: return L"高位代理项后缺少低位代理项";
+        case jsondict::ErrorReason::InvalidLowSurrogate: return L"无效的 Unicode 低位代理项";
+        case jsondict::ErrorReason::IsolatedLowSurrogate: return L"出现孤立的 Unicode 低位代理项";
+        case jsondict::ErrorReason::UnsupportedEscape: return L"不支持的字符串转义";
+        case jsondict::ErrorReason::ControlCharacter: return L"字符串中不能直接包含控制字符";
+        case jsondict::ErrorReason::UnterminatedString: return L"字符串缺少结束引号";
+        case jsondict::ErrorReason::InvalidNumber: return L"无效的 JSON 数字：“" + argument + L"”";
+        case jsondict::ErrorReason::InvalidLiteral: return L"无效的 JSON 字面量";
+        case jsondict::ErrorReason::LiteralSuffix: return L"JSON 字面量后包含无效字符";
+        case jsondict::ErrorReason::StringNotUtf8: return L"字符串值不是有效的 UTF-8";
+        case jsondict::ErrorReason::KeyNotUtf8: return L"对象键不是有效的 UTF-8";
+        case jsondict::ErrorReason::RootObject: return L"JSON 根节点必须是对象";
+        case jsondict::ErrorReason::Unknown: break;
+    }
+    return Utf8ToWide(error.what());
+}
+
 std::wstring ExceptionMessage(const std::exception& error) {
     if (const auto* win32 = dynamic_cast<const Win32Error*>(&error)) {
-        return Utf8ToWide(win32->what()) + L"：" + WindowsErrorMessage(win32->code());
+        return app_l10n::text(Utf8ToWide(win32->what())) + L": " +
+               WindowsErrorMessage(win32->code());
     }
     if (const auto* json = dynamic_cast<const jsondict::Error*>(&error)) {
-        std::wstring result = Utf8ToWide(json->what());
+        std::wstring result = CoreErrorText(*json);
         if (json->line() != 0) {
-            result += L"（第 " + std::to_wstring(json->line()) + L" 行，第 " +
-                      std::to_wstring(json->column()) + L" 列）";
+            result += app_l10n::english
+                ? L" (line " + std::to_wstring(json->line()) + L", column " +
+                  std::to_wstring(json->column()) + L")"
+                : L"（第 " + std::to_wstring(json->line()) + L" 行，第 " +
+                  std::to_wstring(json->column()) + L" 列）";
         }
-        if (!json->path().empty()) result += L"\n路径：" + Utf8ToWide(json->path());
+        if (!json->path().empty()) result +=
+            (app_l10n::english ? L"\nPath: " : L"\n路径：") + Utf8ToWide(json->path());
         return result;
     }
     try {
-        return Utf8ToWide(error.what());
+        const std::string_view raw(error.what());
+        const auto with_detail = [&](std::string_view prefix, std::wstring_view chinese,
+                                     std::wstring_view english) -> std::optional<std::wstring> {
+            if (raw.substr(0, prefix.size()) != prefix) return std::nullopt;
+            return std::wstring(app_l10n::english ? english : chinese) +
+                   Utf8ToWide(raw.substr(prefix.size()));
+        };
+        if (const auto value = with_detail(
+                "打开文件对话框失败，错误码 ", L"打开文件对话框失败，错误码 ",
+                L"Open dialog failed; error code ")) return *value;
+        if (const auto value = with_detail(
+                "另存为对话框失败，错误码 ", L"另存为对话框失败，错误码 ",
+                L"Save As dialog failed; error code ")) return *value;
+        if (const auto value = with_detail(
+                "无法验证原子替换保留的安全备份；备份仍保留在：",
+                L"无法验证原子替换保留的安全备份；备份仍保留在：",
+                L"Could not verify the atomic replacement backup; it remains at: ")) return *value;
+        if (const auto value = with_detail(
+                "目标文件在最终替换前又被其他程序修改。为避免数据丢失，被替换的版本已保留在：",
+                L"目标文件在最终替换前又被其他程序修改。为避免数据丢失，被替换的版本已保留在：",
+                L"The target changed before replacement. The replaced version is preserved at: ")) return *value;
+        if (const auto value = with_detail(
+                "原子替换后无法验证新目标内容；原磁盘版本已保留在：",
+                L"原子替换后无法验证新目标内容；原磁盘版本已保留在：",
+                L"Could not verify the new target; the previous disk version remains at: ")) return *value;
+        return app_l10n::text(Utf8ToWide(raw));
     } catch (...) {
-        return L"未知错误";
+        return app_l10n::text(L"未知错误");
     }
+}
+
+int ShowAppDialog(HWND owner, const wchar_t* body, const wchar_t* caption, UINT flags) {
+    const std::wstring title = app_l10n::text(caption ? caption : L"");
+    const std::wstring content = app_l10n::text(body ? body : L"");
+    std::array<TASKDIALOG_BUTTON, 3> buttons{};
+    const UINT kind = flags & MB_TYPEMASK;
+    int count = 0;
+    const auto label = [](const wchar_t* chinese, const wchar_t* english) {
+        return app_l10n::english ? english : chinese;
+    };
+    if (kind == MB_YESNO || kind == MB_YESNOCANCEL) {
+        const bool draft = caption && std::wstring_view(caption) == L"处理尚未应用的草稿";
+        const bool conflict = caption &&
+            (std::wstring_view(caption) == L"检测到外部文件更改" ||
+             std::wstring_view(caption) == L"无法确认保存基准");
+        const bool save = caption && std::wstring_view(caption) == L"保存更改？";
+        buttons[count++] = {IDYES, draft ? label(L"应用", L"Apply") :
+            conflict ? label(L"覆盖", L"Overwrite") : save ?
+            label(L"保存", L"Save") : label(L"是", L"Yes")};
+        buttons[count++] = {IDNO, draft ? label(L"放弃", L"Discard") :
+            conflict ? label(L"另存为", L"Save As") : save ?
+            label(L"不保存", L"Don't Save") : label(L"否", L"No")};
+        if (kind == MB_YESNOCANCEL) buttons[count++] =
+            {IDCANCEL, label(L"取消", L"Cancel")};
+    } else {
+        buttons[count++] = {IDOK, label(L"确定", L"OK")};
+    }
+    TASKDIALOGCONFIG config{};
+    config.cbSize = sizeof(config);
+    config.hwndParent = owner;
+    config.pszWindowTitle = title.c_str();
+    config.pszContent = content.c_str();
+    config.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ALLOW_DIALOG_CANCELLATION;
+    config.cButtons = static_cast<UINT>(count);
+    config.pButtons = buttons.data();
+    config.nDefaultButton = (flags & MB_DEFBUTTON3) == MB_DEFBUTTON3 && count >= 3
+        ? buttons[2].nButtonID : (flags & MB_DEFBUTTON2) == MB_DEFBUTTON2 && count >= 2
+        ? buttons[1].nButtonID : buttons[0].nButtonID;
+    if (flags & MB_ICONERROR) config.pszMainIcon = TD_ERROR_ICON;
+    else if (flags & MB_ICONWARNING) config.pszMainIcon = TD_WARNING_ICON;
+    else if (flags & MB_ICONINFORMATION) config.pszMainIcon = TD_INFORMATION_ICON;
+    int selected = 0;
+    if (SUCCEEDED(TaskDialogIndirect(&config, &selected, nullptr, nullptr))) return selected;
+    return MessageBoxW(owner, content.c_str(), title.c_str(), flags);
 }
 
 std::wstring GetControlText(HWND control) {
@@ -346,14 +466,14 @@ std::wstring Utf8Preview(std::string_view text, std::size_t maximum_bytes = 256)
 
 std::wstring KindTitle(jsondict::Kind kind) {
     switch (kind) {
-        case jsondict::Kind::String: return L"字符串";
-        case jsondict::Kind::Number: return L"数字";
-        case jsondict::Kind::Boolean: return L"布尔值";
+        case jsondict::Kind::String: return app_l10n::text(L"字符串");
+        case jsondict::Kind::Number: return app_l10n::text(L"数字");
+        case jsondict::Kind::Boolean: return app_l10n::text(L"布尔值");
         case jsondict::Kind::Null: return L"Null";
-        case jsondict::Kind::Object: return L"对象";
-        case jsondict::Kind::Array: return L"数组";
+        case jsondict::Kind::Object: return app_l10n::text(L"对象");
+        case jsondict::Kind::Array: return app_l10n::text(L"数组");
     }
-    return L"未知";
+    return app_l10n::text(L"未知");
 }
 
 std::wstring NodeSummary(const jsondict::Node& node) {
@@ -372,11 +492,13 @@ std::wstring NodeSummary(const jsondict::Node& node) {
         case jsondict::Kind::Null:
             return L"null";
         case jsondict::Kind::Object:
-            return node.child_count() == 0 ? L"空对象" :
-                std::to_wstring(node.child_count()) + L" 个键";
+            return node.child_count() == 0 ? app_l10n::text(L"空对象") :
+                std::to_wstring(node.child_count()) + (app_l10n::english
+                    ? (node.child_count() == 1 ? L" key" : L" keys") : L" 个键");
         case jsondict::Kind::Array:
-            return node.child_count() == 0 ? L"空数组" :
-                std::to_wstring(node.child_count()) + L" 个元素";
+            return node.child_count() == 0 ? app_l10n::text(L"空数组") :
+                std::to_wstring(node.child_count()) + (app_l10n::english
+                    ? (node.child_count() == 1 ? L" element" : L" elements") : L" 个元素");
     }
     return {};
 }
@@ -749,6 +871,7 @@ std::size_t CountNodes(const jsondict::Node& node) {
 }
 
 struct AppState;
+struct RawEditorState;
 void ShowRawEditor(AppState& app, jsondict::NodeId target_id);
 
 struct AppState {
@@ -778,6 +901,7 @@ struct AppState {
     HWND validation = nullptr;
     HWND add_child = nullptr;
     HWND raw_button = nullptr;
+    RawEditorState* raw_editor = nullptr;
     HWND tool_add = nullptr;
     HWND tool_duplicate = nullptr;
     HWND tool_delete = nullptr;
@@ -862,60 +986,96 @@ struct AppState {
     bool SaveDocumentAs();
     bool EnsureDocumentWithinUiLimits(const jsondict::Document& candidate,
                                       HWND message_owner = nullptr);
+    void RefreshLanguage();
+    void RefreshTreeLanguage();
 };
+
+BOOL AppendLocalizedMenu(HMENU menu, UINT flags, UINT_PTR command, const wchar_t* title) {
+    if (!title) return AppendMenuW(menu, flags, command, nullptr);
+    const std::wstring translated = app_l10n::text(title);
+    return AppendMenuW(menu, flags, command, translated.c_str());
+}
 
 HMENU CreateMainMenu() {
     HMENU menu = CreateMenu();
     HMENU file = CreatePopupMenu();
-    AppendMenuW(file, MF_STRING, ID_FILE_NEW, L"新建(&N)\tCtrl+N");
-    AppendMenuW(file, MF_STRING, ID_FILE_OPEN, L"打开(&O)…\tCtrl+O");
-    AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(file, MF_STRING, ID_FILE_SAVE, L"保存(&S)\tCtrl+S");
-    AppendMenuW(file, MF_STRING, ID_FILE_SAVE_AS, L"另存为(&A)…\tCtrl+Shift+S");
-    AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(file, MF_STRING, ID_FILE_EXIT, L"退出(&X)");
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(file), L"文件(&F)");
+    AppendLocalizedMenu(file, MF_STRING, ID_FILE_NEW, L"新建(&N)\tCtrl+N");
+    AppendLocalizedMenu(file, MF_STRING, ID_FILE_OPEN, L"打开(&O)…\tCtrl+O");
+    AppendLocalizedMenu(file, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(file, MF_STRING, ID_FILE_SAVE, L"保存(&S)\tCtrl+S");
+    AppendLocalizedMenu(file, MF_STRING, ID_FILE_SAVE_AS, L"另存为(&A)…\tCtrl+Shift+S");
+    AppendLocalizedMenu(file, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(file, MF_STRING, ID_FILE_EXIT, L"退出(&X)");
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(file), L"文件(&F)");
 
     HMENU edit = CreatePopupMenu();
-    AppendMenuW(edit, MF_STRING, ID_EDIT_FIND, L"搜索(&F)\tCtrl+F");
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(edit), L"编辑(&E)");
+    AppendLocalizedMenu(edit, MF_STRING, ID_EDIT_FIND, L"搜索(&F)\tCtrl+F");
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(edit), L"编辑(&E)");
 
     HMENU node = CreatePopupMenu();
     HMENU add = CreatePopupMenu();
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_STRING, L"字符串");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_NUMBER, L"数字");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_BOOLEAN, L"布尔值");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_NULL, L"Null");
-    AppendMenuW(add, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_OBJECT, L"对象");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_ARRAY, L"数组");
-    AppendMenuW(node, MF_POPUP, reinterpret_cast<UINT_PTR>(add), L"添加(&A)");
-    AppendMenuW(node, MF_STRING, ID_NODE_DUPLICATE, L"复制(&D)\tCtrl+D");
-    AppendMenuW(node, MF_STRING, ID_NODE_DELETE, L"删除\tDelete");
-    AppendMenuW(node, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(node, MF_STRING, ID_NODE_MOVE_UP, L"上移\tAlt+↑");
-    AppendMenuW(node, MF_STRING, ID_NODE_MOVE_DOWN, L"下移\tAlt+↓");
-    AppendMenuW(node, MF_STRING, ID_NODE_SORT, L"按键名排序");
-    AppendMenuW(node, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(node, MF_STRING, ID_NODE_RENAME, L"重命名键\tF2");
-    AppendMenuW(node, MF_STRING, ID_NODE_RAW, L"编辑原始 JSON…\tCtrl+E");
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(node), L"节点(&N)");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_STRING, L"字符串");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_NUMBER, L"数字");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_BOOLEAN, L"布尔值");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_NULL, L"Null");
+    AppendLocalizedMenu(add, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_OBJECT, L"对象");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_ARRAY, L"数组");
+    AppendLocalizedMenu(node, MF_POPUP, reinterpret_cast<UINT_PTR>(add), L"添加(&A)");
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_DUPLICATE, L"复制(&D)\tCtrl+D");
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_DELETE, L"删除\tDelete");
+    AppendLocalizedMenu(node, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_MOVE_UP, L"上移\tAlt+↑");
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_MOVE_DOWN, L"下移\tAlt+↓");
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_SORT, L"按键名排序");
+    AppendLocalizedMenu(node, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_RENAME, L"重命名键\tF2");
+    AppendLocalizedMenu(node, MF_STRING, ID_NODE_RAW, L"编辑原始 JSON…\tCtrl+E");
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(node), L"节点(&N)");
 
     HMENU view = CreatePopupMenu();
-    AppendMenuW(view, MF_STRING, ID_VIEW_EXPAND_ALL, L"全部展开");
-    AppendMenuW(view, MF_STRING, ID_VIEW_COLLAPSE_ALL, L"全部折叠");
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(view), L"查看(&V)");
+    AppendLocalizedMenu(view, MF_STRING, ID_VIEW_EXPAND_ALL, L"全部展开");
+    AppendLocalizedMenu(view, MF_STRING, ID_VIEW_COLLAPSE_ALL, L"全部折叠");
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(view), L"查看(&V)");
 
     HMENU help = CreatePopupMenu();
-    AppendMenuW(help, MF_STRING, ID_HELP_ABOUT, L"关于 JSON 字典编辑器");
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(help), L"帮助(&H)");
+    AppendLocalizedMenu(help, MF_STRING, ID_HELP_ABOUT, L"关于 JSON 字典编辑器");
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(help), L"帮助(&H)");
+
+    HMENU language = CreatePopupMenu();
+    AppendLocalizedMenu(language, MF_STRING, ID_LANGUAGE_SYSTEM, L"跟随系统 / System");
+    AppendLocalizedMenu(language, MF_STRING, ID_LANGUAGE_CHINESE, L"简体中文");
+    AppendLocalizedMenu(language, MF_STRING, ID_LANGUAGE_ENGLISH, L"English");
+    const UINT checked = app_l10n::preference == app_l10n::Preference::System
+        ? ID_LANGUAGE_SYSTEM : app_l10n::preference == app_l10n::Preference::Chinese
+        ? ID_LANGUAGE_CHINESE : ID_LANGUAGE_ENGLISH;
+    CheckMenuRadioItem(language, ID_LANGUAGE_SYSTEM, ID_LANGUAGE_ENGLISH, checked,
+                       MF_BYCOMMAND);
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(language), L"语言 / Language");
     return menu;
+}
+
+HMENU CreateRawLanguageMenu() {
+    HMENU bar = CreateMenu();
+    HMENU language = CreatePopupMenu();
+    AppendLocalizedMenu(language, MF_STRING, ID_LANGUAGE_SYSTEM, L"跟随系统 / System");
+    AppendLocalizedMenu(language, MF_STRING, ID_LANGUAGE_CHINESE, L"简体中文");
+    AppendLocalizedMenu(language, MF_STRING, ID_LANGUAGE_ENGLISH, L"English");
+    const UINT checked = app_l10n::preference == app_l10n::Preference::System
+        ? ID_LANGUAGE_SYSTEM : app_l10n::preference == app_l10n::Preference::Chinese
+        ? ID_LANGUAGE_CHINESE : ID_LANGUAGE_ENGLISH;
+    CheckMenuRadioItem(language, ID_LANGUAGE_SYSTEM, ID_LANGUAGE_ENGLISH, checked,
+                       MF_BYCOMMAND);
+    AppendLocalizedMenu(bar, MF_POPUP, reinterpret_cast<UINT_PTR>(language),
+                        L"语言 / Language");
+    return bar;
 }
 
 HWND CreateChild(AppState& app, DWORD extended_style, const wchar_t* class_name,
                  const wchar_t* text, DWORD style, int id) {
+    const std::wstring title = app_l10n::text(text ? text : L"");
     HWND control = CreateWindowExW(
-        extended_style, class_name, text, WS_CHILD | style,
+        extended_style, class_name, title.c_str(), WS_CHILD | style,
         0, 0, 10, 10, app.window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
         app.instance, nullptr);
     if (!control) throw Win32Error("创建界面控件失败", GetLastError());
@@ -960,8 +1120,9 @@ bool AppState::Create(HINSTANCE app_instance) {
     if (!AdjustWindowRectExForDpi(&frame, style, TRUE, extended_style, dpi)) {
         AdjustWindowRectEx(&frame, style, TRUE, extended_style);
     }
+    const std::wstring localized_title = app_l10n::text(kAppTitle);
     window = CreateWindowExW(
-        extended_style, kMainWindowClass, kAppTitle, style,
+        extended_style, kMainWindowClass, localized_title.c_str(), style,
         CW_USEDEFAULT, CW_USEDEFAULT, frame.right - frame.left, frame.bottom - frame.top,
         nullptr, CreateMainMenu(), instance, this);
     return window != nullptr;
@@ -988,8 +1149,9 @@ void AppState::CreateControls() {
 
     search = CreateChild(*this, WS_EX_CLIENTEDGE, L"EDIT", L"",
                          WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, IDC_SEARCH);
+    const std::wstring search_cue = app_l10n::text(L"搜索键名、路径、类型或值");
     SendMessageW(search, EM_SETCUEBANNER, TRUE,
-                 reinterpret_cast<LPARAM>(L"搜索键名、路径、类型或值"));
+                 reinterpret_cast<LPARAM>(search_cue.c_str()));
     tree_header = CreateChild(*this, 0, L"STATIC", L"键 / 索引          类型          值",
                               WS_VISIBLE | SS_LEFT, IDC_TREE_HEADER);
     tree = CreateChild(*this, WS_EX_CLIENTEDGE, WC_TREEVIEWW, L"",
@@ -1021,7 +1183,8 @@ void AppState::CreateControls() {
                              WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
                              IDC_INS_TYPE);
     for (const wchar_t* label : {L"字符串", L"数字", L"布尔值", L"Null", L"对象", L"数组"}) {
-        SendMessageW(type_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label));
+        const std::wstring localized = app_l10n::text(label);
+        SendMessageW(type_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(localized.c_str()));
     }
     value_label = CreateChild(*this, 0, L"STATIC", L"值", WS_VISIBLE, IDC_INS_VALUE_LABEL);
     string_edit = CreateChild(
@@ -1048,7 +1211,8 @@ void AppState::CreateControls() {
                                WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
                                IDC_FORMAT);
     for (const wchar_t* label : {L"2 个空格", L"4 个空格", L"制表符", L"紧凑"}) {
-        SendMessageW(format_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label));
+        const std::wstring localized = app_l10n::text(label);
+        SendMessageW(format_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(localized.c_str()));
     }
     trailing_checkbox = CreateChild(*this, 0, L"BUTTON", L"末尾换行",
                                     WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
@@ -1145,7 +1309,18 @@ void AppState::Layout() {
     const int button_y = Scale(7);
     const int button_h = Scale(28);
     auto place_button = [&](HWND button, int logical_width) {
-        const int button_w = Scale(logical_width);
+        const std::wstring caption = GetControlText(button);
+        int button_w = Scale(logical_width);
+        if (HDC dc = GetDC(button)) {
+            HGDIOBJ old_font = ui_font ? SelectObject(dc, ui_font) : nullptr;
+            SIZE measured{};
+            if (!caption.empty() && GetTextExtentPoint32W(dc, caption.c_str(),
+                    static_cast<int>(caption.size()), &measured)) {
+                button_w = std::max(button_w, static_cast<int>(measured.cx) + Scale(18));
+            }
+            if (old_font) SelectObject(dc, old_font);
+            ReleaseDC(button, dc);
+        }
         MoveWindow(button, x, button_y, button_w, button_h, TRUE);
         x += button_w + Scale(6);
     };
@@ -1316,7 +1491,7 @@ void AppState::RebuildTree() {
         };
 
         HTREEITEM root = InsertTreeItem(tree, TVI_ROOT,
-            display_text(L"根对象", document.root()), document.root_id());
+            display_text(app_l10n::text(L"根对象"), document.root()), document.root_id());
         add_children(root, document.root());
         TreeView_Expand(tree, root, TVE_EXPAND);
         expanded_ids.insert(document.root_id());
@@ -1333,7 +1508,8 @@ void AppState::RebuildTree() {
             if (node.id() != document.root_id() &&
                 (ContainsInsensitive(name, query) || ContainsInsensitive(path, query) ||
                  ContainsInsensitive(KindTitle(node.kind()), query) ||
-                 ContainsInsensitive(NodeSummary(node), query))) {
+                 ContainsInsensitive(NodeSummary(node), query) ||
+                 ContainsInsensitive(jsondict::search_aliases(node), query))) {
                 matches.push_back(Match{node.id(), display_text(name, node), path});
             }
             if (node.kind() == jsondict::Kind::Object) {
@@ -1348,9 +1524,11 @@ void AppState::RebuildTree() {
                 }
             }
         };
-        collect(document.root(), L"根对象", "$");
+        collect(document.root(), app_l10n::text(L"根对象"), "$");
         HTREEITEM root = InsertTreeItem(tree, TVI_ROOT,
-            L"搜索结果（" + std::to_wstring(matches.size()) + L"）", document.root_id());
+            (app_l10n::english ? L"Search Results (" : L"搜索结果（") +
+            std::to_wstring(matches.size()) + (app_l10n::english ? L")" : L"）"),
+            document.root_id());
         for (const auto& match : matches) {
             InsertTreeItem(tree, root, match.display + L"    " + match.path, match.id);
         }
@@ -1387,7 +1565,8 @@ void AppState::RebuildTree() {
             TreeView_DeleteAllItems(tree);
             try {
                 HTREEITEM root = InsertTreeItem(
-                    tree, TVI_ROOT, L"树视图刷新失败（请重试搜索或重新打开）",
+                    tree, TVI_ROOT,
+                    app_l10n::text(L"树视图刷新失败（请重试搜索或重新打开）"),
                     document.root_id());
                 TreeView_SelectItem(tree, root);
             } catch (...) {
@@ -1406,6 +1585,60 @@ void AppState::RebuildTree() {
     }
 }
 
+void AppState::RefreshTreeLanguage() {
+    std::unordered_map<jsondict::NodeId, std::wstring> labels;
+    labels.reserve(document.node_count());
+    std::function<void(const jsondict::Node&, std::wstring, std::string)> collect;
+    collect = [&](const jsondict::Node& node, std::wstring name, std::string path) {
+        std::wstring label = name + L"    · " + KindTitle(node.kind()) +
+                             L"    · " + NodeSummary(node);
+        if (search_mode && node.id() != document.root_id()) {
+            label += L"    " + Utf8ToWide(path);
+        }
+        labels.emplace(node.id(), std::move(label));
+        if (node.kind() == jsondict::Kind::Object) {
+            for (const auto& member : node.as_object()) {
+                collect(member.value, EscapeForUi(Utf8Preview(member.key, 384), 120),
+                        SearchPathForKey(path, member.key));
+            }
+        } else if (node.kind() == jsondict::Kind::Array) {
+            for (std::size_t index = 0; index < node.as_array().size(); ++index) {
+                collect(node.as_array()[index], L"[" + std::to_wstring(index) + L"]",
+                        path + "[" + std::to_string(index) + "]");
+            }
+        }
+    };
+    collect(document.root(), app_l10n::text(L"根对象"), "$");
+    WindowRedrawGuard redraw(tree);
+    std::function<void(HTREEITEM)> update;
+    update = [&](HTREEITEM item) {
+        while (item) {
+            const jsondict::NodeId id = TreeItemNodeId(tree, item);
+            std::wstring label;
+            if (item == TreeView_GetRoot(tree) && search_mode) {
+                const auto count = TreeView_GetCount(tree);
+                label = (app_l10n::english ? L"Search Results (" : L"搜索结果（") +
+                    std::to_wstring(count > 0 ? count - 1 : 0) +
+                    (app_l10n::english ? L")" : L"）");
+            } else if (const auto found = labels.find(id); found != labels.end()) {
+                label = found->second;
+            }
+            if (!label.empty()) {
+                TVITEMW value{};
+                value.mask = TVIF_TEXT;
+                value.hItem = item;
+                value.pszText = label.data();
+                if (!TreeView_SetItem(tree, &value)) {
+                    throw std::runtime_error("树节点文字刷新失败");
+                }
+            }
+            if (HTREEITEM child = TreeView_GetChild(tree, item)) update(child);
+            item = TreeView_GetNextSibling(tree, item);
+        }
+    };
+    update(TreeView_GetRoot(tree));
+}
+
 void AppState::UpdateInspector() {
     try {
     const jsondict::Node* node = document.find(selected_id);
@@ -1417,7 +1650,7 @@ void AppState::UpdateInspector() {
     {
     BoolFlagGuard loading(loading_inspector);
 
-    std::wstring node_name = L"根对象";
+    std::wstring node_name = app_l10n::text(L"根对象");
     if (location && location->key) {
         node_name = EscapeForUi(Utf8Preview(*location->key, 384), 120);
     } else if (location && location->index) {
@@ -1442,7 +1675,8 @@ void AppState::UpdateInspector() {
                 return unit < 0x20;
             });
         if (unsafe_key) {
-            SetControlText(key_edit, L"此键名包含控制字符或过长，请使用原始 JSON 编辑器。");
+            SetControlText(key_edit, app_l10n::text(
+                L"此键名包含控制字符或过长，请使用原始 JSON 编辑器。"));
             EnableWindow(key_edit, FALSE);
             EnableWindow(key_apply, FALSE);
         } else {
@@ -1466,7 +1700,7 @@ void AppState::UpdateInspector() {
 
     switch (node->kind()) {
         case jsondict::Kind::String: {
-            SetControlText(value_label, L"字符串值");
+            SetControlText(value_label, app_l10n::text(L"字符串值"));
             const std::wstring value = Utf8ToWide(node->as_string());
             SetVisible(string_edit, true);
             SetVisible(value_apply, true);
@@ -1476,7 +1710,7 @@ void AppState::UpdateInspector() {
                 });
             if (unsafe_value) {
                 SetControlText(string_edit,
-                    L"此字符串包含回车/控制字符或过长，请使用原始 JSON 编辑器。");
+                    app_l10n::text(L"此字符串包含回车/控制字符或过长，请使用原始 JSON 编辑器。"));
                 EnableWindow(string_edit, FALSE);
                 EnableWindow(value_apply, FALSE);
             } else {
@@ -1485,12 +1719,13 @@ void AppState::UpdateInspector() {
             break;
         }
         case jsondict::Kind::Number: {
-            SetControlText(value_label, L"数字值");
+            SetControlText(value_label, app_l10n::text(L"数字值"));
             SetVisible(number_edit, true);
             SetVisible(value_apply, true);
             const std::wstring value = Utf8ToWide(node->as_number().text);
             if (value.size() > kMaximumInspectorCharacters) {
-                SetControlText(number_edit, L"数字文本过长，请使用原始 JSON 编辑器。");
+                SetControlText(number_edit,
+                    app_l10n::text(L"数字文本过长，请使用原始 JSON 编辑器。"));
                 EnableWindow(number_edit, FALSE);
                 EnableWindow(value_apply, FALSE);
             } else {
@@ -1500,28 +1735,38 @@ void AppState::UpdateInspector() {
             break;
         }
         case jsondict::Kind::Boolean:
-            SetControlText(value_label, L"布尔值");
+            SetControlText(value_label, app_l10n::text(L"布尔值"));
             SendMessageW(boolean_check, BM_SETCHECK,
                          node->as_boolean() ? BST_CHECKED : BST_UNCHECKED, 0);
-            SetControlText(boolean_check, node->as_boolean() ? L"True（真）" : L"False（假）");
+            SetControlText(boolean_check,
+                app_l10n::text(node->as_boolean() ? L"True（真）" : L"False（假）"));
             SetVisible(boolean_check, true);
             break;
         case jsondict::Kind::Null:
             SetControlText(value_label, L"Null");
-            SetControlText(info, L"此值为空（null）。Null 与空字符串、数字 0 和 false 不相同。");
+            SetControlText(info,
+                app_l10n::text(L"此值为空（null）。Null 与空字符串、数字 0 和 false 不相同。"));
             SetVisible(info, true);
             break;
         case jsondict::Kind::Object:
-            SetControlText(value_label, L"对象");
-            SetControlText(info, node->child_count() == 0 ? L"空对象" :
-                L"包含 " + std::to_wstring(node->child_count()) + L" 个唯一键。");
+            SetControlText(value_label, app_l10n::text(L"对象"));
+            SetControlText(info, node->child_count() == 0 ? app_l10n::text(L"空对象") :
+                (app_l10n::english ? L"Contains " : L"包含 ") +
+                std::to_wstring(node->child_count()) +
+                (app_l10n::english
+                    ? (node->child_count() == 1 ? L" unique key." : L" unique keys.")
+                    : L" 个唯一键。"));
             SetVisible(info, true);
             SetVisible(add_child, true);
             break;
         case jsondict::Kind::Array:
-            SetControlText(value_label, L"数组");
-            SetControlText(info, node->child_count() == 0 ? L"空数组" :
-                L"包含 " + std::to_wstring(node->child_count()) + L" 个有序元素。");
+            SetControlText(value_label, app_l10n::text(L"数组"));
+            SetControlText(info, node->child_count() == 0 ? app_l10n::text(L"空数组") :
+                (app_l10n::english ? L"Contains " : L"包含 ") +
+                std::to_wstring(node->child_count()) +
+                (app_l10n::english
+                    ? (node->child_count() == 1 ? L" ordered element." : L" ordered elements.")
+                    : L" 个有序元素。"));
             SetVisible(info, true);
             SetVisible(add_child, true);
             break;
@@ -1568,12 +1813,13 @@ void AppState::UpdateDraftValidation() {
             const bool changed = draft != *location->key;
             pending = pending || changed;
             EnableWindow(key_apply, available && changed);
-            if (!available) warning = L"同一对象中已经存在此键名。";
-            else if (draft.empty()) warning = L"空字符串是合法 JSON 键，但通常不便维护。";
+            if (!available) warning = app_l10n::text(L"同一对象中已经存在此键名。");
+            else if (draft.empty()) warning =
+                app_l10n::text(L"空字符串是合法 JSON 键，但通常不便维护。");
         } catch (const std::exception&) {
             pending = true;
             EnableWindow(key_apply, FALSE);
-            warning = L"键名包含无效的 Unicode 文本。";
+            warning = app_l10n::text(L"键名包含无效的 Unicode 文本。");
         }
     }
 
@@ -1584,11 +1830,12 @@ void AppState::UpdateDraftValidation() {
             const bool changed = draft != node->as_number().text;
             pending = pending || changed;
             EnableWindow(value_apply, valid && changed);
-            if (!valid) warning = L"请输入有效 JSON 数字；不支持前导零、NaN 或 Infinity。";
+            if (!valid) warning =
+                app_l10n::text(L"请输入有效 JSON 数字；不支持前导零、NaN 或 Infinity。");
         } catch (const std::exception&) {
             pending = true;
             EnableWindow(value_apply, FALSE);
-            warning = L"数字只能包含 JSON 数字语法中的 ASCII 字符。";
+            warning = app_l10n::text(L"数字只能包含 JSON 数字语法中的 ASCII 字符。");
         }
     } else if (node->kind() == jsondict::Kind::String && IsWindowVisible(string_edit) &&
                IsWindowEnabled(string_edit)) {
@@ -1600,11 +1847,11 @@ void AppState::UpdateDraftValidation() {
         } catch (const std::exception&) {
             pending = true;
             EnableWindow(value_apply, FALSE);
-            warning = L"字符串包含无效的 Unicode 文本。";
+            warning = app_l10n::text(L"字符串包含无效的 Unicode 文本。");
         }
     }
     if (pending && warning.empty()) {
-        warning = L"草稿尚未应用；点击“应用”后才会写入文档。";
+        warning = app_l10n::text(L"草稿尚未应用；点击“应用”后才会写入文档。");
     }
     const bool pending_changed = inspector_draft_dirty != pending;
     inspector_draft_dirty = pending;
@@ -1615,18 +1862,25 @@ void AppState::UpdateDraftValidation() {
 
 void AppState::UpdateStatusAndTitle() {
     const std::size_t top_level = document.root().child_count();
-    std::wstring status_text = L"  ✓ 有效 JSON 字典    " + std::to_wstring(top_level) +
-        L" 个顶层键 · " + std::to_wstring(document.node_count()) + L" 个节点";
-    if (inspector_draft_dirty) status_text += L"    ·    有未应用草稿";
+    const std::size_t total_nodes = document.node_count();
+    std::wstring status_text = app_l10n::english
+        ? L"  ✓ Valid JSON dictionary    " + std::to_wstring(top_level) +
+          (top_level == 1 ? L" top-level key · " : L" top-level keys · ") +
+          std::to_wstring(total_nodes) + (total_nodes == 1 ? L" node" : L" nodes")
+        : L"  ✓ 有效 JSON 字典    " + std::to_wstring(top_level) +
+          L" 个顶层键 · " + std::to_wstring(total_nodes) + L" 个节点";
+    if (inspector_draft_dirty) status_text += app_l10n::english
+        ? L"    ·    Unapplied draft" : L"    ·    有未应用草稿";
     SetControlText(status, status_text);
-    std::wstring filename = current_path.empty() ? L"未命名.json" : current_path;
+    std::wstring filename = current_path.empty() ? app_l10n::text(L"未命名.json") : current_path;
     const std::size_t separator = filename.find_last_of(L"\\/");
     if (separator != std::wstring::npos) filename.erase(0, separator + 1);
     const bool unsaved = dirty || inspector_draft_dirty;
     SetWindowTextW(window, (filename + (unsaved ? L" * — " : L" — ") +
-                            kAppTitle).c_str());
+                            app_l10n::text(kAppTitle)).c_str());
     if (unsaved) {
-        ShutdownBlockReasonCreate(window, L"JSON 字典包含未保存或未应用的更改。");
+        ShutdownBlockReasonCreate(window, app_l10n::text(
+            L"JSON 字典包含未保存或未应用的更改。").c_str());
     } else {
         ShutdownBlockReasonDestroy(window);
     }
@@ -1682,8 +1936,8 @@ void AppState::MarkDirty() {
     try {
         UpdateStatusAndTitle();
     } catch (const std::exception& error) {
-        MessageBoxW(window,
-                    (L"更改已应用，但窗口状态刷新失败。请尽快保存。\n\n" +
+        ShowAppDialog(window,
+                    (app_l10n::text(L"更改已应用，但窗口状态刷新失败。请尽快保存。\n\n") +
                      ExceptionMessage(error)).c_str(),
                     L"更改已应用", MB_ICONWARNING | MB_OK);
     }
@@ -1697,8 +1951,8 @@ void AppState::FinishCommittedMutation() {
         UpdateInspector();
     } catch (const std::exception& error) {
         tree_refresh_needed = true;
-        MessageBoxW(window,
-                    (L"更改已应用到文档，但界面刷新失败。请立即保存并重新打开程序。\n\n" +
+        ShowAppDialog(window,
+                    (app_l10n::text(L"更改已应用到文档，但界面刷新失败。请立即保存并重新打开程序。\n\n") +
                      ExceptionMessage(error)).c_str(),
                     L"数据已应用，界面刷新失败", MB_ICONWARNING | MB_OK);
     }
@@ -1716,13 +1970,13 @@ void AppState::SelectNode(jsondict::NodeId id) {
 
 void AppState::ShowAddMenu(HWND anchor) {
     HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, ID_NODE_ADD_STRING, L"字符串");
-    AppendMenuW(menu, MF_STRING, ID_NODE_ADD_NUMBER, L"数字");
-    AppendMenuW(menu, MF_STRING, ID_NODE_ADD_BOOLEAN, L"布尔值");
-    AppendMenuW(menu, MF_STRING, ID_NODE_ADD_NULL, L"Null");
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, ID_NODE_ADD_OBJECT, L"对象");
-    AppendMenuW(menu, MF_STRING, ID_NODE_ADD_ARRAY, L"数组");
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_ADD_STRING, L"字符串");
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_ADD_NUMBER, L"数字");
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_ADD_BOOLEAN, L"布尔值");
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_ADD_NULL, L"Null");
+    AppendLocalizedMenu(menu, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_ADD_OBJECT, L"对象");
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_ADD_ARRAY, L"数组");
     POINT point{};
     if (anchor) {
         RECT rect{};
@@ -1740,7 +1994,7 @@ void AppState::ShowAddMenu(HWND anchor) {
 void AppState::AddNode(jsondict::Kind kind) {
     if (!ResolveInspectorDrafts(false)) return;
     if (document.node_count() >= kMaximumDocumentNodes) {
-        MessageBoxW(window, L"文档已达到 50000 个节点的图形编辑安全上限。",
+        ShowAppDialog(window, L"文档已达到 50000 个节点的图形编辑安全上限。",
                     L"无法添加节点", MB_ICONWARNING | MB_OK);
         return;
     }
@@ -1767,7 +2021,7 @@ void AppState::DuplicateSelected() {
     const jsondict::Node* source = document.find(selected_id);
     if (!source) return;
     if (document.node_count() + CountNodes(*source) > kMaximumDocumentNodes) {
-        MessageBoxW(window, L"复制后会超过 50000 个节点的图形编辑安全上限。",
+        ShowAppDialog(window, L"复制后会超过 50000 个节点的图形编辑安全上限。",
                     L"无法复制节点", MB_ICONWARNING | MB_OK);
         return;
     }
@@ -1789,7 +2043,7 @@ void AppState::DeleteSelected() {
     const jsondict::Node* node = document.find(selected_id);
     if (!node) return;
     if (node->is_container() && node->child_count() > 0) {
-        if (MessageBoxW(window,
+        if (ShowAppDialog(window,
                         L"所选容器包含子项。删除后，其中的所有内容也会被删除。\n\n确定继续吗？",
                         L"删除所选容器？", MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
             return;
@@ -1848,7 +2102,7 @@ void AppState::ChangeSelectedKind() {
     node = document.find(selected_id);
     if (!node) return;
     if (node->is_container() && node->child_count() > 0) {
-        if (MessageBoxW(window,
+        if (ShowAppDialog(window,
                         L"更改类型会移除当前对象或数组中的全部子项。\n\n确定继续吗？",
                         L"更改类型会移除子项", MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
             UpdateInspector();
@@ -1905,7 +2159,7 @@ bool AppState::CommitInspectorDrafts(bool refresh) {
             if (value != node->as_number().text) number_draft = value;
         }
     } catch (const std::exception& error) {
-        MessageBoxW(window, ExceptionMessage(error).c_str(), L"无法应用检查器草稿",
+        ShowAppDialog(window, ExceptionMessage(error).c_str(), L"无法应用检查器草稿",
                     MB_ICONERROR | MB_OK);
         UpdateDraftValidation();
         return false;
@@ -1924,7 +2178,7 @@ bool AppState::CommitInspectorDrafts(bool refresh) {
     if (committed && string_draft) committed = candidate.set_string(selected_id, *string_draft);
     if (committed && number_draft) committed = candidate.set_number(selected_id, *number_draft);
     if (!committed) {
-        MessageBoxW(window, L"文档在应用草稿前发生变化；草稿没有提交。",
+        ShowAppDialog(window, L"文档在应用草稿前发生变化；草稿没有提交。",
                     L"无法应用检查器草稿", MB_ICONERROR | MB_OK);
         return false;
     }
@@ -1940,8 +2194,8 @@ bool AppState::CommitInspectorDrafts(bool refresh) {
             tree_refresh_needed = false;
             UpdateInspector();
         } catch (const std::exception& error) {
-            MessageBoxW(window,
-                        (L"草稿已经应用到文档，但界面刷新失败。请立即保存并重新打开程序。\n\n" +
+            ShowAppDialog(window,
+                        (app_l10n::text(L"草稿已经应用到文档，但界面刷新失败。请立即保存并重新打开程序。\n\n") +
                          ExceptionMessage(error)).c_str(),
                         L"数据已应用，界面刷新失败", MB_ICONWARNING | MB_OK);
         }
@@ -1952,7 +2206,7 @@ bool AppState::CommitInspectorDrafts(bool refresh) {
 bool AppState::ResolveInspectorDrafts(bool refresh) {
     if (!inspector_draft_dirty) return true;
     BoolFlagGuard resolving(resolving_inspector_drafts);
-    const int choice = MessageBoxW(
+    const int choice = ShowAppDialog(
         window,
         L"检查器中有尚未应用的键名或值。\n\n"
         L"选择“是”应用草稿，选择“否”放弃草稿，选择“取消”返回编辑。",
@@ -2013,7 +2267,7 @@ void AppState::ExpandAll(bool expand) {
 bool AppState::ConfirmSaveIfDirty() {
     if (!ResolveInspectorDrafts(true)) return false;
     if (!dirty) return true;
-    const int choice = MessageBoxW(
+    const int choice = ShowAppDialog(
         window, L"当前 JSON 字典包含尚未保存的更改。\n\n是否现在保存？",
         L"保存更改？", MB_ICONWARNING | MB_YESNOCANCEL | MB_DEFBUTTON1);
     if (choice == IDCANCEL || choice == 0) return false;
@@ -2041,7 +2295,9 @@ void AppState::NewDocument() {
 
 std::optional<std::wstring> ShowOpenDialog(HWND owner) {
     std::vector<wchar_t> buffer(32768, L'\0');
-    const wchar_t filter[] = L"JSON 文件 (*.json)\0*.json\0所有文件 (*.*)\0*.*\0\0";
+    const wchar_t* filter = app_l10n::english
+        ? L"JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0\0"
+        : L"JSON 文件 (*.json)\0*.json\0所有文件 (*.*)\0*.*\0\0";
     OPENFILENAMEW dialog{};
     dialog.lStructSize = sizeof(dialog);
     dialog.hwndOwner = owner;
@@ -2066,7 +2322,9 @@ std::optional<std::wstring> ShowSaveDialog(HWND owner, std::wstring initial_path
     if (!initial_path.empty() && initial_path.size() + 1 < buffer.size()) {
         std::copy(initial_path.begin(), initial_path.end(), buffer.begin());
     }
-    const wchar_t filter[] = L"JSON 文件 (*.json)\0*.json\0所有文件 (*.*)\0*.*\0\0";
+    const wchar_t* filter = app_l10n::english
+        ? L"JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0\0"
+        : L"JSON 文件 (*.json)\0*.json\0所有文件 (*.*)\0*.*\0\0";
     OPENFILENAMEW dialog{};
     dialog.lStructSize = sizeof(dialog);
     dialog.hwndOwner = owner;
@@ -2092,7 +2350,7 @@ void AppState::OpenDocument() {
         const auto path = ShowOpenDialog(window);
         if (path) OpenPath(*path, false);
     } catch (const std::exception& error) {
-        MessageBoxW(window, ExceptionMessage(error).c_str(), L"无法显示打开对话框",
+        ShowAppDialog(window, ExceptionMessage(error).c_str(), L"无法显示打开对话框",
                     MB_ICONERROR | MB_OK);
     }
 }
@@ -2102,9 +2360,13 @@ bool AppState::EnsureDocumentWithinUiLimits(const jsondict::Document& candidate,
     const HWND owner = message_owner ? message_owner : window;
     const std::size_t count = candidate.node_count();
     if (count > kMaximumDocumentNodes) {
-        MessageBoxW(owner,
-                    (L"此 JSON 包含 " + std::to_wstring(count) +
-                     L" 个节点，超过 50000 个节点的图形编辑安全上限。").c_str(),
+        ShowAppDialog(owner,
+                    (app_l10n::english
+                        ? L"This JSON contains " + std::to_wstring(count) +
+                          (count == 1 ? L" node" : L" nodes") +
+                          L", exceeding the 50,000-node editor safety limit."
+                        : L"此 JSON 包含 " + std::to_wstring(count) +
+                          L" 个节点，超过 50000 个节点的图形编辑安全上限。").c_str(),
                     L"文档过大", MB_ICONWARNING | MB_OK);
         return false;
     }
@@ -2112,7 +2374,7 @@ bool AppState::EnsureDocumentWithinUiLimits(const jsondict::Document& candidate,
     const std::uint64_t final_size = static_cast<std::uint64_t>(encoded.size()) +
         (candidate.trailing_newline() ? 1u : 0u) + 3u;
     if (final_size > kMaximumFileBytes) {
-        MessageBoxW(owner,
+        ShowAppDialog(owner,
                     L"按当前格式写出的 UTF-8 文件会超过 16 MiB。请减少内容或改用紧凑格式。",
                     L"文档过大", MB_ICONWARNING | MB_OK);
         return false;
@@ -2143,7 +2405,7 @@ bool AppState::OpenPath(const std::wstring& path, bool ask_about_dirty) {
         SHAddToRecentDocs(SHARD_PATHW, current_path.c_str());
         return true;
     } catch (const std::exception& error) {
-        MessageBoxW(window, ExceptionMessage(error).c_str(), L"无法打开 JSON 字典",
+        ShowAppDialog(window, ExceptionMessage(error).c_str(), L"无法打开 JSON 字典",
                     MB_ICONERROR | MB_OK);
         return false;
     }
@@ -2165,7 +2427,7 @@ bool AppState::SaveDocument() {
                   L"选择“是”覆盖当前磁盘版本；选择“否”改为另存为；选择“取消”停止保存。"
                 : L"程序无法确认当前路径是否仍与上次保存后一致。\n\n"
                   L"选择“是”以此刻的磁盘文件为基准覆盖；选择“否”改为另存为；选择“取消”停止保存。";
-            const int choice = MessageBoxW(
+            const int choice = ShowAppDialog(
                 window, message,
                 baseline_known ? L"检测到外部文件更改" : L"无法确认保存基准",
                 MB_ICONWARNING | MB_YESNOCANCEL | MB_DEFBUTTON3);
@@ -2193,10 +2455,11 @@ bool AppState::SaveDocument() {
         } catch (const std::exception& error) {
             saved_target.reset();
             MarkDirty();
-            MessageBoxW(
+            ShowAppDialog(
                 window,
-                (L"程序已完成原子写入，但随后无法确认磁盘内容仍与当前文档一致。"
-                 L"当前文档仍保持“未保存”状态，程序不会继续关闭或新建。\n\n" +
+                (app_l10n::text(
+                    L"程序已完成原子写入，但随后无法确认磁盘内容仍与当前文档一致。"
+                    L"当前文档仍保持“未保存”状态，程序不会继续关闭或新建。\n\n") +
                  ExceptionMessage(error)).c_str(),
                 L"保存后验证失败", MB_ICONWARNING | MB_OK);
             return false;
@@ -2206,7 +2469,7 @@ bool AppState::SaveDocument() {
         SHAddToRecentDocs(SHARD_PATHW, current_path.c_str());
         return true;
     } catch (const std::exception& error) {
-        MessageBoxW(window, ExceptionMessage(error).c_str(), L"保存失败",
+        ShowAppDialog(window, ExceptionMessage(error).c_str(), L"保存失败",
                     MB_ICONERROR | MB_OK);
         return false;
     }
@@ -2219,7 +2482,7 @@ bool AppState::SaveDocumentAs() {
     try {
         path = ShowSaveDialog(window, std::move(initial));
     } catch (const std::exception& error) {
-        MessageBoxW(window, ExceptionMessage(error).c_str(), L"无法显示另存为对话框",
+        ShowAppDialog(window, ExceptionMessage(error).c_str(), L"无法显示另存为对话框",
                     MB_ICONERROR | MB_OK);
         return false;
     }
@@ -2232,7 +2495,7 @@ bool AppState::SaveDocumentAs() {
     } catch (const std::exception& error) {
         current_path = old_path;
         saved_target = old_target;
-        MessageBoxW(window, ExceptionMessage(error).c_str(), L"无法检查另存为目标",
+        ShowAppDialog(window, ExceptionMessage(error).c_str(), L"无法检查另存为目标",
                     MB_ICONERROR | MB_OK);
         return false;
     }
@@ -2248,23 +2511,23 @@ void AppState::ShowTreeContextMenu(POINT screen_point) {
     if (!node) return;
     HMENU menu = CreatePopupMenu();
     HMENU add = CreatePopupMenu();
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_STRING, L"字符串");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_NUMBER, L"数字");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_BOOLEAN, L"布尔值");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_NULL, L"Null");
-    AppendMenuW(add, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_OBJECT, L"对象");
-    AppendMenuW(add, MF_STRING, ID_NODE_ADD_ARRAY, L"数组");
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(add),
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_STRING, L"字符串");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_NUMBER, L"数字");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_BOOLEAN, L"布尔值");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_NULL, L"Null");
+    AppendLocalizedMenu(add, MF_SEPARATOR, 0, nullptr);
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_OBJECT, L"对象");
+    AppendLocalizedMenu(add, MF_STRING, ID_NODE_ADD_ARRAY, L"数组");
+    AppendLocalizedMenu(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(add),
                 node->is_container() ? L"添加子项" : L"添加同级项");
-    AppendMenuW(menu, MF_STRING, ID_NODE_RAW, L"编辑原始 JSON…");
+    AppendLocalizedMenu(menu, MF_STRING, ID_NODE_RAW, L"编辑原始 JSON…");
     if (node->kind() == jsondict::Kind::Object) {
-        AppendMenuW(menu, MF_STRING, ID_NODE_SORT, L"按键名排序");
+        AppendLocalizedMenu(menu, MF_STRING, ID_NODE_SORT, L"按键名排序");
     }
     if (selected_id != document.root_id()) {
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, ID_NODE_DUPLICATE, L"复制");
-        AppendMenuW(menu, MF_STRING, ID_NODE_DELETE, L"删除");
+        AppendLocalizedMenu(menu, MF_SEPARATOR, 0, nullptr);
+        AppendLocalizedMenu(menu, MF_STRING, ID_NODE_DUPLICATE, L"复制");
+        AppendLocalizedMenu(menu, MF_STRING, ID_NODE_DELETE, L"删除");
     }
     const UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN,
                                         screen_point.x, screen_point.y, 0, window, nullptr);
@@ -2315,7 +2578,7 @@ void AppState::HandleCommand(int id, int notification, HWND source) {
         id == IDC_INS_VALUE_APPLY || id == IDC_INS_BOOLEAN ||
         id == IDC_INS_ADD || id == IDC_INS_RAW;
     if (!tree_operational && requires_operational_tree) {
-        MessageBoxW(window,
+        ShowAppDialog(window,
                     L"树视图尚未完整刷新，为避免操作到不可见节点，节点修改已暂时停用。"
                     L"请在搜索框中重试搜索，或重新打开文件。",
                     L"树视图不可用", MB_ICONWARNING | MB_OK);
@@ -2388,6 +2651,21 @@ void AppState::HandleCommand(int id, int notification, HWND source) {
     }
 
     switch (id) {
+        case ID_LANGUAGE_SYSTEM:
+        case ID_LANGUAGE_CHINESE:
+        case ID_LANGUAGE_ENGLISH: {
+            const auto choice = id == ID_LANGUAGE_CHINESE ? app_l10n::Preference::Chinese :
+                                id == ID_LANGUAGE_ENGLISH ? app_l10n::Preference::English :
+                                app_l10n::Preference::System;
+            const bool saved = app_l10n::save(choice);
+            RefreshLanguage();
+            if (!saved) ShowAppDialog(window,
+                app_l10n::english ? L"Language changed for this session but could not be saved."
+                                   : L"本次语言切换已生效，但无法保存设置。",
+                app_l10n::english ? L"Language Preference" : L"语言设置",
+                MB_ICONWARNING | MB_OK);
+            break;
+        }
         case ID_FILE_NEW: NewDocument(); break;
         case ID_FILE_OPEN: OpenDocument(); break;
         case ID_FILE_SAVE: SaveDocument(); break;
@@ -2426,7 +2704,7 @@ void AppState::HandleCommand(int id, int notification, HWND source) {
         case IDC_INS_BOOLEAN: ToggleBoolean(); break;
         case IDC_INS_ADD: ShowAddMenu(add_child); break;
         case ID_HELP_ABOUT:
-            MessageBoxW(window,
+            ShowAppDialog(window,
                 L"JSON 字典编辑器 Windows 版\n\n"
                 L"原生 Win32 图形化编辑器。文件仅在本机以 UTF-8 处理，不上传网络。",
                 L"关于", MB_ICONINFORMATION | MB_OK);
@@ -2532,7 +2810,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
             try {
                 app->CreateControls();
             } catch (const std::exception& error) {
-                MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"无法创建应用界面",
+                ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"无法创建应用界面",
                             MB_ICONERROR | MB_OK);
                 return -1;
             }
@@ -2550,7 +2828,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
                 app->HandleCommand(LOWORD(w_param), HIWORD(w_param),
                                    reinterpret_cast<HWND>(l_param));
             } catch (const std::exception& error) {
-                MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"操作失败",
+                ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"操作失败",
                             MB_ICONERROR | MB_OK);
             }
             return 0;
@@ -2560,7 +2838,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
                 try {
                     return app->HandleTreeNotification(header);
                 } catch (const std::exception& error) {
-                    MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"树操作失败",
+                    ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"树操作失败",
                                 MB_ICONERROR | MB_OK);
                     return 0;
                 }
@@ -2579,7 +2857,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
                     app->RebuildTree();
                 } catch (const std::exception& error) {
                     app->search_refresh_pending = true;
-                    MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"搜索失败",
+                    ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"搜索失败",
                                 MB_ICONERROR | MB_OK);
                 }
                 return 0;
@@ -2595,7 +2873,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
                 app->RebuildTree();
             } catch (const std::exception& error) {
                 app->search_refresh_pending = true;
-                MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"搜索失败",
+                ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"搜索失败",
                             MB_ICONERROR | MB_OK);
             }
             return 0;
@@ -2606,7 +2884,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
                     app->RebuildTree();
                 } catch (const std::exception& error) {
                     app->tree_refresh_needed = true;
-                    MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"树刷新失败",
+                    ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"树刷新失败",
                                 MB_ICONWARNING | MB_OK);
                 }
             }
@@ -2647,7 +2925,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
                 app->CreateFonts();
                 app->Layout();
             } catch (const std::exception& error) {
-                MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"DPI 布局更新失败",
+                ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"DPI 布局更新失败",
                             MB_ICONWARNING | MB_OK);
             }
             return 0;
@@ -2685,7 +2963,7 @@ LRESULT CALLBACK AppState::WindowProc(HWND hwnd, UINT message, WPARAM w_param, L
             const UINT count = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0);
             if (count != 1) {
                 DragFinish(drop);
-                MessageBoxW(hwnd, L"请一次只拖入一个 JSON 文件。", L"无法打开多个文件",
+                ShowAppDialog(hwnd, L"请一次只拖入一个 JSON 文件。", L"无法打开多个文件",
                             MB_ICONINFORMATION | MB_OK);
                 return 0;
             }
@@ -2800,6 +3078,61 @@ struct RawEditorState {
     bool loading = false;
     bool draft_dirty = false;
     std::wstring recovery_text;
+    enum class Status { Message, Valid, Failure } status_kind = Status::Message;
+    std::wstring status_key = L"尚未检查";
+    jsondict::Kind valid_kind = jsondict::Kind::Object;
+    std::size_t valid_count = 0;
+    std::exception_ptr status_error;
+
+    void RefreshLanguage() {
+        if (!window) return;
+        SetWindowTextW(window, app_l10n::text(is_root() ? L"编辑完整 JSON 字典" :
+                                               L"编辑所选节点的原始 JSON").c_str());
+        SetControlText(check, app_l10n::text(L"检查"));
+        SetControlText(format, app_l10n::text(L"格式化"));
+        SetControlText(apply, app_l10n::text(L"应用"));
+        SetControlText(cancel, app_l10n::text(L"取消"));
+        switch (status_kind) {
+            case Status::Message: SetControlText(status, app_l10n::text(status_key)); break;
+            case Status::Valid:
+                SetControlText(status, (app_l10n::english ? L"✓ Valid " : L"✓ 有效的 ") +
+                    KindTitle(valid_kind) + L" · " + std::to_wstring(valid_count) +
+                    (app_l10n::english ?
+                        (valid_count == 1 ? L" node" : L" nodes") : L" 个节点"));
+                break;
+            case Status::Failure:
+                try {
+                    if (status_error) std::rethrow_exception(status_error);
+                } catch (const std::exception& error) {
+                    SetControlText(status,
+                        (app_l10n::english ? L"Error: " : L"错误：") + ExceptionMessage(error));
+                }
+                break;
+        }
+        DrawMenuBar(window);
+        Layout();
+    }
+
+    void SetStatusKey(const wchar_t* key) {
+        status_kind = Status::Message;
+        status_key = key;
+        status_error = nullptr;
+        SetControlText(status, app_l10n::text(status_key));
+    }
+
+    void SetStatusError(const std::exception& error) {
+        status_kind = Status::Failure;
+        status_error = std::current_exception();
+        SetControlText(status,
+            (app_l10n::english ? L"Error: " : L"错误：") + ExceptionMessage(error));
+    }
+
+    void SetStatusValid(jsondict::Kind kind, std::size_t count) {
+        status_kind = Status::Valid;
+        valid_kind = kind;
+        valid_count = count;
+        RefreshLanguage();
+    }
 
     int Scale(int value) const { return MulDiv(value, static_cast<int>(dpi), 96); }
     bool is_root() const { return app && target_id == app->document.root_id(); }
@@ -2818,7 +3151,7 @@ struct RawEditorState {
                 try {
                     state->CreateControls();
                 } catch (const std::exception& error) {
-                    MessageBoxW(hwnd, ExceptionMessage(error).c_str(),
+                    ShowAppDialog(hwnd, ExceptionMessage(error).c_str(),
                                 L"无法创建原始 JSON 编辑器", MB_ICONERROR | MB_OK);
                     return -1;
                 }
@@ -2843,7 +3176,7 @@ struct RawEditorState {
                     state->CreateFonts();
                     state->Layout();
                 } catch (const std::exception& error) {
-                    MessageBoxW(hwnd, ExceptionMessage(error).c_str(),
+                    ShowAppDialog(hwnd, ExceptionMessage(error).c_str(),
                                 L"DPI 布局更新失败", MB_ICONWARNING | MB_OK);
                 }
                 return 0;
@@ -2853,12 +3186,17 @@ struct RawEditorState {
                     if (LOWORD(w_param) == IDC_RAW_EDIT && HIWORD(w_param) == EN_CHANGE) {
                         if (!state->loading) {
                             state->draft_dirty = true;
-                            SetControlText(state->status, L"内容已更改，尚未应用");
+                            state->SetStatusKey(L"内容已更改，尚未应用");
                             ShutdownBlockReasonCreate(hwnd, L"原始 JSON 编辑器包含未应用的草稿。");
                         }
                         return 0;
                     }
                     switch (LOWORD(w_param)) {
+                        case ID_LANGUAGE_SYSTEM:
+                        case ID_LANGUAGE_CHINESE:
+                        case ID_LANGUAGE_ENGLISH:
+                            state->app->HandleCommand(LOWORD(w_param), 0, nullptr);
+                            return 0;
                         case IDC_RAW_CHECK: state->CheckDraft(); return 0;
                         case IDC_RAW_FORMAT: state->FormatDraft(); return 0;
                         case IDC_RAW_APPLY: state->ApplyDraft(); return 0;
@@ -2867,14 +3205,14 @@ struct RawEditorState {
                     }
                 } catch (const std::exception& error) {
                     state->loading = false;
-                    SetControlText(state->status, L"操作失败：" + ExceptionMessage(error));
-                    MessageBoxW(hwnd, ExceptionMessage(error).c_str(), L"原始 JSON 操作失败",
+                    state->SetStatusError(error);
+                    ShowAppDialog(hwnd, ExceptionMessage(error).c_str(), L"原始 JSON 操作失败",
                                 MB_ICONERROR | MB_OK);
                 }
                 return 0;
             case WM_CLOSE:
                 if (state->draft_dirty &&
-                    MessageBoxW(hwnd,
+                    ShowAppDialog(hwnd,
                                 L"原始 JSON 草稿尚未应用。关闭窗口会放弃这些更改。\n\n确定关闭吗？",
                                 L"放弃原始 JSON 草稿？",
                                 MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
@@ -2946,8 +3284,9 @@ struct RawEditorState {
         }
         loading = false;
         draft_dirty = false;
-        SetControlText(status, is_root() ? L"正在编辑完整 JSON 字典；根节点必须是对象。" :
-                                          L"正在编辑所选节点；应用前会完整验证。" );
+        SetStatusKey(is_root() ? L"正在编辑完整 JSON 字典；根节点必须是对象。" :
+                                 L"正在编辑所选节点；应用前会完整验证。");
+        RefreshLanguage();
     }
 
     void CreateFonts() {
@@ -2984,7 +3323,7 @@ struct RawEditorState {
         GetClientRect(window, &client);
         const int margin = Scale(14);
         const int button_h = Scale(30);
-        const int footer_h = Scale(58);
+        const int footer_h = Scale(72);
         const int button_w = Scale(78);
         const int client_width = static_cast<int>(client.right);
         const int client_height = static_cast<int>(client.bottom);
@@ -3000,8 +3339,8 @@ struct RawEditorState {
         MoveWindow(check, right - button_w, footer_y, button_w, button_h, TRUE);
         right -= button_w + Scale(8);
         MoveWindow(format, right - button_w, footer_y, button_w, button_h, TRUE);
-        MoveWindow(status, margin, footer_y + Scale(5),
-                   std::max(0, right - button_w - margin - Scale(8)), Scale(24), TRUE);
+        MoveWindow(status, margin, footer_y - Scale(32),
+                   std::max(0, client_width - margin * 2), Scale(28), TRUE);
     }
 
     jsondict::Node ParseDraft() const {
@@ -3022,10 +3361,9 @@ struct RawEditorState {
     void CheckDraft() {
         try {
             const jsondict::Node node = ParseDraft();
-            SetControlText(status, L"✓ 有效的 " + KindTitle(node.kind()) + L" · " +
-                                      std::to_wstring(CountNodes(node)) + L" 个节点");
+            SetStatusValid(node.kind(), CountNodes(node));
         } catch (const std::exception& error) {
-            SetControlText(status, L"错误：" + ExceptionMessage(error));
+            SetStatusError(error);
         }
     }
 
@@ -3044,7 +3382,7 @@ struct RawEditorState {
                 recovery_text.clear();
                 draft_dirty = true;
                 ShutdownBlockReasonCreate(window, L"原始 JSON 编辑器包含未应用的草稿。");
-                SetControlText(status, L"✓ 原草稿已从内存恢复，尚未应用");
+                SetStatusKey(L"✓ 原草稿已从内存恢复，尚未应用");
                 return;
             }
             const jsondict::Node node = ParseDraft();
@@ -3082,10 +3420,10 @@ struct RawEditorState {
             loading = false;
             draft_dirty = true;
             ShutdownBlockReasonCreate(window, L"原始 JSON 编辑器包含未应用的草稿。");
-            SetControlText(status, L"✓ 已格式化并通过检查");
+            SetStatusKey(L"✓ 已格式化并通过检查");
         } catch (const std::exception& error) {
             loading = false;
-            SetControlText(status, L"错误：" + ExceptionMessage(error));
+            SetStatusError(error);
         }
     }
 
@@ -3094,13 +3432,13 @@ struct RawEditorState {
         try {
             parsed = ParseDraft();
         } catch (const std::exception& error) {
-            SetControlText(status, L"错误：" + ExceptionMessage(error));
+            SetStatusError(error);
             return;
         }
 
         const jsondict::Node* old_node = app->document.find(target_id);
         if (!old_node) {
-            SetControlText(status, L"错误：目标节点已不存在");
+            SetStatusKey(L"错误：目标节点已不存在");
             return;
         }
         if (jsondict::equivalent(*old_node, *parsed)) {
@@ -3112,16 +3450,16 @@ struct RawEditorState {
         const std::size_t future_count = app->document.node_count() - CountNodes(*old_node) +
                                          CountNodes(*parsed);
         if (future_count > kMaximumDocumentNodes) {
-            SetControlText(status, L"错误：应用后会超过 50000 个节点的图形编辑安全上限");
+            SetStatusKey(L"错误：应用后会超过 50000 个节点的图形编辑安全上限");
             return;
         }
         jsondict::Document candidate = app->document;
         if (!candidate.replace_node(target_id, *parsed)) {
-            SetControlText(status, L"错误：替换会违反根对象、重复键或 512 层嵌套限制");
+            SetStatusKey(L"错误：替换会违反根对象、重复键或 512 层嵌套限制");
             return;
         }
         if (!app->EnsureDocumentWithinUiLimits(candidate, window)) {
-            SetControlText(status, L"错误：应用后会超过图形编辑安全上限");
+            SetStatusKey(L"错误：应用后会超过图形编辑安全上限");
             return;
         }
         app->document = std::move(candidate);
@@ -3135,8 +3473,8 @@ struct RawEditorState {
             app->RebuildTree();
             app->UpdateInspector();
         } catch (const std::exception& error) {
-            MessageBoxW(window,
-                        (L"数据已经应用，但主窗口刷新失败。请立即保存并重新打开程序。\n\n" +
+            ShowAppDialog(window,
+                        (app_l10n::text(L"数据已经应用，但主窗口刷新失败。请立即保存并重新打开程序。\n\n") +
                          ExceptionMessage(error)).c_str(),
                         L"数据已应用，界面刷新失败", MB_ICONWARNING | MB_OK);
         }
@@ -3159,7 +3497,7 @@ void ShowRawEditor(AppState& app, jsondict::NodeId target_id) {
         window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
         window_class.lpszClassName = kRawWindowClass;
         if (!RegisterClassExW(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
-            MessageBoxW(app.window, L"无法注册原始 JSON 编辑器窗口。", L"错误",
+            ShowAppDialog(app.window, L"无法注册原始 JSON 编辑器窗口。", L"错误",
                         MB_ICONERROR | MB_OK);
             return;
         }
@@ -3176,18 +3514,22 @@ void ShowRawEditor(AppState& app, jsondict::NodeId target_id) {
     constexpr DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     RECT frame{0, 0, MulDiv(760, static_cast<int>(state.dpi), 96),
                      MulDiv(560, static_cast<int>(state.dpi), 96)};
-    if (!AdjustWindowRectExForDpi(&frame, style, FALSE, extended_style, state.dpi)) {
-        AdjustWindowRectEx(&frame, style, FALSE, extended_style);
+    if (!AdjustWindowRectExForDpi(&frame, style, TRUE, extended_style, state.dpi)) {
+        AdjustWindowRectEx(&frame, style, TRUE, extended_style);
     }
+    HMENU raw_menu = CreateRawLanguageMenu();
+    const std::wstring localized_title = app_l10n::text(title);
     HWND window = CreateWindowExW(
-        extended_style, kRawWindowClass, title, style,
+        extended_style, kRawWindowClass, localized_title.c_str(), style,
         CW_USEDEFAULT, CW_USEDEFAULT, frame.right - frame.left, frame.bottom - frame.top,
-        app.window, nullptr, app.instance, &state);
+        app.window, raw_menu, app.instance, &state);
     if (!window) {
-        MessageBoxW(app.window, L"无法创建原始 JSON 编辑器窗口。", L"错误",
+        DestroyMenu(raw_menu);
+        ShowAppDialog(app.window, L"无法创建原始 JSON 编辑器窗口。", L"错误",
                     MB_ICONERROR | MB_OK);
         return;
     }
+    app.raw_editor = &state;
 
     RECT owner_rect{};
     RECT dialog_rect{};
@@ -3243,8 +3585,125 @@ void ShowRawEditor(AppState& app, jsondict::NodeId target_id) {
     if (accelerators) DestroyAcceleratorTable(accelerators);
     if (IsWindow(window)) DestroyWindow(window);
     EnableWindow(app.window, TRUE);
+    app.raw_editor = nullptr;
     SetForegroundWindow(app.window);
     if (saw_quit) PostQuitMessage(quit_code);
+}
+
+void AppState::RefreshLanguage() {
+    HMENU fresh = CreateMainMenu();
+    if (!fresh) throw std::runtime_error("Unable to create language menu");
+    HMENU previous = GetMenu(window);
+    if (!SetMenu(window, fresh)) {
+        DestroyMenu(fresh);
+        throw std::runtime_error("Unable to update language menu");
+    }
+    if (previous) DestroyMenu(previous);
+    DrawMenuBar(window);
+
+    auto set_label = [](HWND control, const wchar_t* key) {
+        if (control) SetControlText(control, app_l10n::text(key));
+    };
+    set_label(tool_add, L"添加 ▾");
+    set_label(tool_duplicate, L"复制");
+    set_label(tool_delete, L"删除");
+    set_label(tool_up, L"上移");
+    set_label(tool_down, L"下移");
+    set_label(tool_sort, L"排序");
+    set_label(tool_raw, L"原始 JSON");
+    set_label(tree_header, L"键 / 索引          类型          值");
+    set_label(path_label, L"JSON 路径");
+    set_label(key_label, L"键名");
+    set_label(key_apply, L"应用");
+    set_label(type_label, L"值类型");
+    set_label(value_apply, L"应用");
+    set_label(add_child, L"添加子项 ▾");
+    set_label(raw_button, L"编辑此节点的原始 JSON…");
+    set_label(trailing_checkbox, L"末尾换行");
+    const std::wstring cue = app_l10n::text(L"搜索键名、路径、类型或值");
+    SendMessageW(search, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(cue.c_str()));
+
+    {
+        BoolFlagGuard loading(loading_inspector);
+        const LRESULT type_selected = SendMessageW(type_combo, CB_GETCURSEL, 0, 0);
+        SendMessageW(type_combo, CB_RESETCONTENT, 0, 0);
+        for (const wchar_t* key : {L"字符串", L"数字", L"布尔值", L"Null", L"对象", L"数组"}) {
+            const std::wstring value = app_l10n::text(key);
+            SendMessageW(type_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(value.c_str()));
+        }
+        if (type_selected != CB_ERR) SendMessageW(type_combo, CB_SETCURSEL,
+                                                   static_cast<WPARAM>(type_selected), 0);
+        const LRESULT format_selected = SendMessageW(format_combo, CB_GETCURSEL, 0, 0);
+        SendMessageW(format_combo, CB_RESETCONTENT, 0, 0);
+        for (const wchar_t* key : {L"2 个空格", L"4 个空格", L"制表符", L"紧凑"}) {
+            const std::wstring value = app_l10n::text(key);
+            SendMessageW(format_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(value.c_str()));
+        }
+        if (format_selected != CB_ERR) SendMessageW(format_combo, CB_SETCURSEL,
+                                                     static_cast<WPARAM>(format_selected), 0);
+    }
+
+    const jsondict::Node* node = document.find(selected_id);
+    if (node) {
+        const auto location = document.location(selected_id);
+        std::wstring name = app_l10n::text(L"根对象");
+        if (location && location->key) {
+            name = EscapeForUi(Utf8Preview(*location->key, 384), 120);
+        } else if (location && location->index) {
+            name = L"[" + std::to_wstring(*location->index) + L"]";
+        }
+        SetControlText(title, name + L"  ·  " + KindTitle(node->kind()));
+        switch (node->kind()) {
+            case jsondict::Kind::String: set_label(value_label, L"字符串值"); break;
+            case jsondict::Kind::Number: set_label(value_label, L"数字值"); break;
+            case jsondict::Kind::Boolean:
+                set_label(value_label, L"布尔值");
+                set_label(boolean_check, node->as_boolean() ? L"True（真）" : L"False（假）");
+                break;
+            case jsondict::Kind::Null:
+                set_label(value_label, L"Null");
+                set_label(info, L"此值为空（null）。Null 与空字符串、数字 0 和 false 不相同。");
+                break;
+            case jsondict::Kind::Object:
+            case jsondict::Kind::Array: {
+                const bool object = node->kind() == jsondict::Kind::Object;
+                set_label(value_label, object ? L"对象" : L"数组");
+                const std::size_t count = node->child_count();
+                if (count == 0) set_label(info, object ? L"空对象" : L"空数组");
+                else SetControlText(info, app_l10n::english
+                    ? L"Contains " + std::to_wstring(count) +
+                        (object ? (count == 1 ? L" unique key." : L" unique keys.") :
+                                  (count == 1 ? L" ordered element." : L" ordered elements."))
+                    : L"包含 " + std::to_wstring(count) +
+                        (object ? L" 个唯一键。" : L" 个有序元素。"));
+                break;
+            }
+        }
+        if (key_edit && !IsWindowEnabled(key_edit)) {
+            set_label(key_edit, L"此键名包含控制字符或过长，请使用原始 JSON 编辑器。");
+        }
+        if (string_edit && !IsWindowEnabled(string_edit)) {
+            set_label(string_edit,
+                      L"此字符串包含回车/控制字符或过长，请使用原始 JSON 编辑器。");
+        }
+        if (number_edit && !IsWindowEnabled(number_edit)) {
+            set_label(number_edit, L"数字文本过长，请使用原始 JSON 编辑器。");
+        }
+    }
+    RefreshTreeLanguage();
+    UpdateDraftValidation();
+    UpdateStatusAndTitle();
+    if (raw_editor && raw_editor->window) {
+        HMENU fresh_raw = CreateRawLanguageMenu();
+        HMENU old_raw = GetMenu(raw_editor->window);
+        if (SetMenu(raw_editor->window, fresh_raw)) {
+            if (old_raw) DestroyMenu(old_raw);
+        } else {
+            DestroyMenu(fresh_raw);
+        }
+        raw_editor->RefreshLanguage();
+    }
+    Layout();
 }
 
 void WriteStandardHandle(DWORD handle_id, std::string_view text) {
@@ -3325,6 +3784,32 @@ int RunIntegratedSelfTest() {
         for (const char* number : invalid_numbers) {
             SelfTestExpect(!jsondict::is_valid_number(number), "invalid number accepted");
         }
+        const LANGID chinese_system = MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED);
+        const LANGID english_system = MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);
+        SelfTestExpect(!app_l10n::resolves_to_english(app_l10n::Preference::System, chinese_system),
+                       "Chinese system preference did not resolve to Chinese");
+        SelfTestExpect(app_l10n::resolves_to_english(app_l10n::Preference::English, chinese_system),
+                       "manual English preference did not override Chinese system");
+        SelfTestExpect(!app_l10n::resolves_to_english(app_l10n::Preference::System, chinese_system),
+                       "returning to Chinese system preference kept English");
+        SelfTestExpect(app_l10n::resolves_to_english(app_l10n::Preference::System, english_system),
+                       "English system preference did not resolve to English");
+        SelfTestExpect(!app_l10n::resolves_to_english(app_l10n::Preference::Chinese, english_system),
+                       "manual Chinese preference did not override English system");
+        SelfTestExpect(app_l10n::resolves_to_english(app_l10n::Preference::System, english_system),
+                       "returning to English system preference kept Chinese");
+        SelfTestExpect(jsondict::search_aliases(jsondict::parse(R"({"x":1})"))
+                           .find(L"empty object") == std::wstring::npos,
+                       "nonempty object matched empty-object search term");
+        SelfTestExpect(jsondict::search_aliases(jsondict::parse(R"({})"))
+                           .find(L"empty object") != std::wstring::npos,
+                       "empty object lost bilingual search term");
+        SelfTestExpect(jsondict::search_aliases(jsondict::parse("[1]"))
+                           .find(L"空数组") == std::wstring::npos,
+                       "nonempty array matched empty-array search term");
+        SelfTestExpect(jsondict::search_aliases(jsondict::parse("[]"))
+                           .find(L"空数组") != std::wstring::npos,
+                       "empty array lost bilingual search term");
         SelfTestExpectJsonError(
             [] { (void)jsondict::parse(R"({"a":1,"\u0061":2})"); },
             jsondict::ErrorCode::DuplicateKey, "escaped duplicate key accepted");
@@ -3421,7 +3906,8 @@ int ValidateJsonFile(const std::wstring& path) {
         PrintOut("VALID_JSON_DICTIONARY: " + std::to_string(document.node_count()) + " nodes");
         return 0;
     } catch (const std::exception& error) {
-        PrintError(std::string("INVALID_JSON_DICTIONARY: ") + error.what());
+        PrintError(std::string("INVALID_JSON_DICTIONARY: ") +
+                   WideToUtf8(ExceptionMessage(error)));
         return 1;
     }
 }
@@ -3432,33 +3918,43 @@ std::optional<int> HandleCommandLine(int argument_count, wchar_t** arguments,
     const std::wstring_view command(arguments[1]);
     if (command == L"--self-test") {
         if (argument_count != 2) {
-            PrintError("usage: JSONDictionaryEditor.exe --self-test");
+            PrintError(app_l10n::english ?
+                "usage: JSONDictionaryEditor.exe --self-test" :
+                "用法：JSONDictionaryEditor.exe --self-test");
             return 2;
         }
         return RunIntegratedSelfTest();
     }
     if (command == L"--validate-json") {
         if (argument_count != 3) {
-            PrintError("usage: JSONDictionaryEditor.exe --validate-json <path>");
+            PrintError(app_l10n::english ?
+                "usage: JSONDictionaryEditor.exe --validate-json <path>" :
+                "用法：JSONDictionaryEditor.exe --validate-json <路径>");
             return 2;
         }
         return ValidateJsonFile(arguments[2]);
     }
     if (command == L"--version") {
-        PrintOut("JSON Dictionary Editor for Windows 1.0.1");
+        PrintOut("JSON Dictionary Editor for Windows 1.1.1");
         return 0;
     }
     if (command == L"--help") {
-        PrintOut(
-            "JSON Dictionary Editor for Windows 1.0.1\n"
+        PrintOut(app_l10n::english ?
+            "JSON Dictionary Editor for Windows 1.1.1\n"
             "  --self-test             run deterministic core and file self-tests\n"
             "  --validate-json <path>  validate a UTF-8 JSON object file\n"
             "  --version               display version\n"
-            "  <path.json>             open a JSON dictionary in the GUI");
+            "  <path.json>             open a JSON dictionary in the GUI" :
+            "JSON 字典编辑器 Windows 版 1.1.1\n"
+            "  --self-test             运行核心及文件自检\n"
+            "  --validate-json <路径>  验证 UTF-8 JSON 对象文件\n"
+            "  --version               显示版本\n"
+            "  <路径.json>             在图形界面中打开 JSON 字典");
         return 0;
     }
     if (command.size() >= 2 && command[0] == L'-' && command[1] == L'-') {
-        PrintError("unknown command; use --help");
+        PrintError(app_l10n::english ? "unknown command; use --help" :
+                                         "未知命令；请使用 --help");
         return 2;
     }
     initial_path = std::wstring(command);
@@ -3468,12 +3964,15 @@ std::optional<int> HandleCommandLine(int argument_count, wchar_t** arguments,
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+    const HRESULT com_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    app_l10n::load();
     int argument_count = 0;
     wchar_t** arguments = CommandLineToArgvW(GetCommandLineW(), &argument_count);
     std::optional<std::wstring> initial_path;
     if (arguments) {
         if (const auto result = HandleCommandLine(argument_count, arguments, initial_path)) {
             LocalFree(static_cast<HLOCAL>(arguments));
+            if (SUCCEEDED(com_result)) CoUninitialize();
             return *result;
         }
         LocalFree(static_cast<HLOCAL>(arguments));
@@ -3484,11 +3983,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         sizeof(common_controls), ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES |
                                      ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&common_controls);
-    const HRESULT com_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-
     AppState app;
     if (!app.Create(instance)) {
-        MessageBoxW(nullptr, L"无法创建 JSON 字典编辑器主窗口。", L"启动失败",
+        ShowAppDialog(nullptr, L"无法创建 JSON 字典编辑器主窗口。", L"启动失败",
                     MB_ICONERROR | MB_OK);
         if (SUCCEEDED(com_result)) CoUninitialize();
         return 1;
