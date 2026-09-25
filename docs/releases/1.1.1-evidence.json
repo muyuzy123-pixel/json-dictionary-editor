@@ -1,0 +1,118 @@
+{
+  "phase": "local-candidate-only",
+  "base_public_main": "7d7ab5be545357aa49a0f499cb76822f65f382f4",
+  "build_source_commit": "e9aa80312567baa43a34a26593c2001803ecca0e",
+  "local_branch": "codex/release-1.1.1",
+  "proposed_tag": "v1.1.1",
+  "remote_tag_created": false,
+  "remote_push_performed": false,
+  "old_preview_tag_and_assets_unchanged": true,
+  "apps": {
+    "macos": "1.1.1 (3)",
+    "windows": "1.1.1"
+  },
+  "license": "MIT; Copyright (c) 2026 muyuzy123-pixel",
+  "assets": [
+    {
+      "file": "JSONDictionaryEditor-macOS-Universal.zip",
+      "sha256": "2b09623c940075b61fcfee26612a16f97d124c05c018df63067e3369c0255c0f",
+      "bytes": 1282054,
+      "entries": 26,
+      "source": {
+        "app_version": "1.1.1",
+        "architecture": "universal",
+        "tag": "v1.1.1",
+        "source_commit": "e9aa80312567baa43a34a26593c2001803ecca0e"
+      }
+    },
+    {
+      "file": "JSONDictionaryEditor-Windows-x64.zip",
+      "sha256": "71704e2990ad8ffdb65e2adba1923b6ccc185ebbe0e75951f905c210791f3430",
+      "bytes": 300924,
+      "entries": 11,
+      "source": {
+        "source_commit": "e9aa80312567baa43a34a26593c2001803ecca0e",
+        "tag": "v1.1.1",
+        "app_version": "1.1.1",
+        "architecture": "x64"
+      }
+    },
+    {
+      "file": "JSONDictionaryEditor-Windows-arm64.zip",
+      "sha256": "00dc2a847de6b8880951fdb047310e6c5e55c3e3012d36da22054ea792625413",
+      "bytes": 277724,
+      "entries": 11,
+      "source": {
+        "source_commit": "e9aa80312567baa43a34a26593c2001803ecca0e",
+        "tag": "v1.1.1",
+        "app_version": "1.1.1",
+        "architecture": "arm64"
+      }
+    }
+  ],
+  "sha256_manifest_sha256": "18a6ff0eebcb673c0e3abee92d543eeb9dfb609055ee9ace530c355b9560dd0c",
+  "build_environment": {
+    "macos": "macOS 26.6.2 arm64; Swift 6.3.3; SDK 26.5; native arm64 and Rosetta x86_64 CLI",
+    "windows_cross": "LLVM-MinGW 20260616 UCRT; LLVM/Clang 22.1.8; static cross-build only"
+  },
+  "checks": {
+    "macos_unsigned_direct_swiftc_build": "passed",
+    "macos_bilingual_required_keys": 108,
+    "macos_fixed_icon_sha256": "e0a3b35e53ee2fe28bd95b988e6d9555a4902361c3338051c3667e92245ea53d",
+    "macos_final_app_signature": "strict ad-hoc verified; not notarized",
+    "macos_final_zip_localization_resources": "two Localizable.strings catalogues, two InfoPlist.strings, resource bundle metadata all match source",
+    "macos_final_app_self_tests": "arm64 and x86_64 via Rosetta passed",
+    "macos_english_sample": "13 nodes; both architectures passed",
+    "macos_missing_zh_resource_injection": "unsigned app self-test exited 1 with missing resource diagnostic",
+    "macos_normal_gui_save": {
+      "source_commit": "e9aa80312567baa43a34a26593c2001803ecca0e",
+      "normal_flow": [
+        "open isolated 13-node sample copy",
+        "select name field",
+        "focus and paste Chinese multiline text",
+        "observe tree model update",
+        "Cmd+S",
+        "independent file parse and app validation"
+      ],
+      "saved_sha256": "848e9a57ecbc05e2b4ac6fe76e29bd6b42c227c3cec1c1ee17fe9f31371ad9fc",
+      "other_fields_unchanged": true,
+      "key_order_preserved": true,
+      "app_validation_exit": 0,
+      "app_validation_output": "VALID_JSON_DICTIONARY: 13 nodes",
+      "closed_and_reopened": true,
+      "historic_AX_hang_retested": false,
+      "language_menu_options_visible": [
+        "跟随系统 / System",
+        "简体中文",
+        "English"
+      ],
+      "language_preference_changed": false,
+      "gui_scope": "Final ZIP extracted Mac App; isolated sample copy only; 13 nodes, multi-line Unicode save/reopen.",
+      "formal_normal_save_gate": "passed",
+      "historic_AX_hang_status": "not retested; not claimed fixed"
+    },
+    "windows_core_optimized_assertions": 90,
+    "windows_core_asan_ubsan_assertions": 90,
+    "windows_required_ui_keys": 119,
+    "windows_structured_error_reasons": 27,
+    "shared_parser_writer_fixture_checks": "70/70 passed",
+    "windows_cross_x64_arm64": "both PE32+ GUI built; no Windows EXE executed",
+    "windows_new_ico_sha256": "e635dbe42f45fb5321707439e05db95aae9c02f11c595ee73dd9873353cccae9",
+    "windows_embedded_ico_frame_check": "7/7 per architecture matched repository ICO",
+    "windows_version_and_copyright": "both PE 1.1.1 / muyuzy123-pixel verified; no Authenticode",
+    "windows_actual_loaded_archives": "see ZIP build audit; both include libuuid.a and no winpthreads/winstorecompat",
+    "zip_crc_utf8_permissions_licenses_source_json": "three ZIPs passed independently; README.en.md included in each"
+  },
+  "not_verified": [
+    "Windows 1.1.1 x64 final attachment CI (old preview-1 CI does not transfer)",
+    "Windows native MSVC build",
+    "Windows x64/ARM64 GUI, splitter visual, IME, DPI, hardware acceptance",
+    "Mac minimum macOS 13 and physical Intel device",
+    "Historic AX direct-value immediate-save path in 1.1.1, not retested and not fixed by inference"
+  ],
+  "formal_promotion": {
+    "normal_macos_save_gate": "passed",
+    "overall_ready": false,
+    "reason": "Local assets are prepared, but new Windows final-attachment CI and authorized remote prerelease have not happened; old AX observation remains open and full GUI/device coverage is limited."
+  }
+}
