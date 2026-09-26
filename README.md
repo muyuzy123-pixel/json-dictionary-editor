@@ -4,15 +4,24 @@
 
 项目自有内容采用 [MIT](LICENSE)，Copyright © 2026 **muyuzy123-pixel**。第三方组件适用各自许可，见 [许可说明](docs/licensing.md) 和 [第三方声明](THIRD_PARTY_NOTICES.txt)。
 
-## 1.1.1 本地候选
+## 1.1.1 预发布
 
-本工作分支正在增量合入 macOS/Windows 1.1.1：简体中文与英文界面、1.1.1 空容器搜索和中文资源自检修复，以及英文示例和说明。目标版本为 Mac **1.1.1 (3)**、Windows **1.1.1**。旧图标、许可与两个平台独立构建方式保留；语言切换行为不变。
+当前 [`v1.1.1` 预发布](https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/tag/v1.1.1)包含简体中文与英文界面、空容器搜索和中文资源自检修复，以及英文示例和说明。版本为 Mac **1.1.1 (3)**、Windows **1.1.1**。旧图标、许可与两个平台独立构建方式保留；语言切换行为不变。
 
-[1.1.1 候选记录](docs/releases/1.1.1.md) · [待审阅发行说明](docs/releases/1.1.1-notes.md)。该版本尚未推送、未创建远端标签或 Release；下方下载仍是历史 `preview-1`，不得拿其附件或 CI 作为 1.1.1 通过证据。
+[1.1.1 验证记录](docs/releases/1.1.1.md) · [发行说明](docs/releases/1.1.1-notes.md) · [Windows x64 附件 CI](https://github.com/muyuzy123-pixel/json-dictionary-editor/actions/runs/36206512065)。正式版仍需同一 x64 下载包的 Windows 桌面最小交互验收。
+
+| 1.1.1 下载 | SHA-256 |
+|---|---|
+| [macOS Universal ZIP](https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/download/v1.1.1/JSONDictionaryEditor-macOS-Universal.zip) | `2b09623c940075b61fcfee26612a16f97d124c05c018df63067e3369c0255c0f` |
+| [Windows x64 ZIP](https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/download/v1.1.1/JSONDictionaryEditor-Windows-x64.zip) | `71704e2990ad8ffdb65e2adba1923b6ccc185ebbe0e75951f905c210791f3430` |
+| [Windows ARM64 ZIP](https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/download/v1.1.1/JSONDictionaryEditor-Windows-arm64.zip) | `00dc2a847de6b8880951fdb047310e6c5e55c3e3012d36da22054ea792625413` |
+| [SHA256SUMS.txt](https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/download/v1.1.1/SHA256SUMS.txt) | 三个 ZIP 的校验清单 |
+
+`v1.1.1` 指向三个包的产品提交 `e9aa80312567baa43a34a26593c2001803ecca0e`；后续验证记录提交不会改变附件来源。Mac 为 ad-hoc 签名且未公证，Windows 未做 Authenticode 签名。下载后按清单核对摘要；包内 `SOURCE.json` 可用于核对源码提交。
 
 ## 首次预览 `preview-1`
 
-`preview-1` 提供以下下载包；当前发布状态、实际验收及已知限制见 [发布记录](docs/PREVIEW_RELEASE.md)。
+`preview-1` 的历史下载包保持原样；其实际验收及已知限制见 [旧版发布记录](docs/PREVIEW_RELEASE.md)。
 
 | 下载 | 应用版本 | 平台与分发状态 |
 |---|---|---|
@@ -35,9 +44,9 @@ macOS 可用 `shasum -a 256 下载文件.zip`，Windows 可用 `Get-FileHash -Al
 
 ## 验证范围
 
-最终 Mac 包的签名、两架构诊断及正常输入/保存/重开局部流程通过；Windows x64 最终 ZIP 已通过 Windows CI 下载校验、诊断和内置文件自测。详见[发布记录](docs/PREVIEW_RELEASE.md)。
+1.1.1 最终 Mac 包的签名、两架构诊断、正常输入/保存/重开局部流程及隔离语言切换通过；Windows x64 最终 ZIP 在 Windows Server 2025 CI 中通过下载校验、诊断和内置文件自测。详见[本版记录](docs/releases/1.1.1.md)。这不构成 Windows 桌面 GUI 验收；旧版结果另见[历史记录](docs/PREVIEW_RELEASE.md)。
 
-已知异常：一次辅助功能直接赋值后立即保存的自动化尝试曾挂起，根因未明、未确认修复，该路径未计为通过。后续正常输入流程的局部成功不代表所有保存路径均已验收。
+已知异常：历史辅助功能直接赋值后立即保存的自动化尝试曾挂起；1.1.1 未复测这一路径，尚无修复证据。正常输入流程的局部成功不代表所有保存路径均已验收。
 
 **Windows ARM64 实机、Windows 图标与 1.0.1 分隔条修复后视觉、输入法、DPI 和完整 GUI 验收仍未完成。** Windows CI 运行环境不是 Windows 10/11 的完整桌面验收。macOS 最低系统版本和真实 Intel 设备也不能从一次 Universal 构建推导为已通过。
 
@@ -53,4 +62,4 @@ macOS 可用 `shasum -a 256 下载文件.zip`，Windows 可用 `Get-FileHash -Al
 - [预览打包与核验](docs/RELEASING.md)：源码提交、第三方声明、签名和下载包检查。
 - [图标来源和生成](docs/icon-generation.md)：Windows 普通构建直接读取仓库 ICO，不要求 macOS；Mac 固定图标资源保留历史字节。
 
-仓库不包含构建缓存、工具链、私人数据、原始桌面录像或完整会话日志。当前候选文件与摘要见 [清单](docs/file-manifest.tsv) 和 [SHA256SUMS](SHA256SUMS)。
+仓库不包含构建缓存、工具链、私人数据、原始桌面录像或完整会话日志。源码文件与摘要见 [清单](docs/file-manifest.tsv) 和 [SHA256SUMS](SHA256SUMS)。

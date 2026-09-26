@@ -1,11 +1,11 @@
 {
-  "phase": "local-candidate-only",
+  "phase": "public-prerelease-ci-passed-formal-gates-open",
   "base_public_main": "7d7ab5be545357aa49a0f499cb76822f65f382f4",
   "build_source_commit": "e9aa80312567baa43a34a26593c2001803ecca0e",
   "local_branch": "codex/release-1.1.1",
   "proposed_tag": "v1.1.1",
-  "remote_tag_created": false,
-  "remote_push_performed": false,
+  "remote_tag_created": true,
+  "remote_push_performed": true,
   "old_preview_tag_and_assets_unchanged": true,
   "apps": {
     "macos": "1.1.1 (3)",
@@ -94,7 +94,13 @@
     "macos_isolated_language_regression": {
       "source_zip_sha256": "2b09623c940075b61fcfee26612a16f97d124c05c018df63067e3369c0255c0f",
       "qa_copy_change": "temporary Bundle ID and ad-hoc re-sign only; release ZIP unchanged",
-      "sequence": ["简体中文", "English", "跟随系统", "quit", "relaunch"],
+      "sequence": [
+        "简体中文",
+        "English",
+        "跟随系统",
+        "quit",
+        "relaunch"
+      ],
       "ui_labels_changed": true,
       "unapplied_version_draft": "42",
       "model_and_disk_version": 1,
@@ -110,15 +116,41 @@
     "windows_required_ui_keys": 119,
     "windows_structured_error_reasons": 27,
     "shared_parser_writer_fixture_checks": "70/70 passed",
-    "windows_cross_x64_arm64": "both PE32+ GUI built; no Windows EXE executed",
+    "windows_cross_x64_arm64": "both PE32+ GUI built; x64 final-release EXE ran in Windows Server CI; ARM64 EXE not executed",
     "windows_new_ico_sha256": "e635dbe42f45fb5321707439e05db95aae9c02f11c595ee73dd9873353cccae9",
     "windows_embedded_ico_frame_check": "7/7 per architecture matched repository ICO",
     "windows_version_and_copyright": "both PE 1.1.1 / muyuzy123-pixel verified; no Authenticode",
     "windows_actual_loaded_archives": "see ZIP build audit; both include libuuid.a and no winpthreads/winstorecompat",
-    "zip_crc_utf8_permissions_licenses_source_json": "three ZIPs passed independently; README.en.md included in each"
+    "zip_crc_utf8_permissions_licenses_source_json": "three ZIPs passed independently; README.en.md included in each",
+    "windows_x64_final_attachment_ci": {
+      "run_id": 36206512065,
+      "url": "https://github.com/muyuzy123-pixel/json-dictionary-editor/actions/runs/36206512065",
+      "workflow_head_sha": "14001d7c08de5ff3025bbda6ad1d9db706b0ee92",
+      "conclusion": "success",
+      "released_zip_sha256": "71704e2990ad8ffdb65e2adba1923b6ccc185ebbe0e75951f905c210791f3430",
+      "released_exe_sha256": "92cbf2ec5a32476cdfc16efb08faba1d2ac449f342d1ad33e6618b553e37c3a2",
+      "runner_os": "Microsoft Windows Server 2025 Datacenter 10.0.26100",
+      "runner_image": "windows-2025-vs2026 20260922.246.2",
+      "runner_version": "2.337.0",
+      "permissions": "contents: read; metadata: read",
+      "inputs": {
+        "tag": "v1.1.1",
+        "expected_version": "1.1.1",
+        "release_state": "prerelease",
+        "expected_sha256": "71704e2990ad8ffdb65e2adba1923b6ccc185ebbe0e75951f905c210791f3430"
+      },
+      "diagnostic_exit_codes": {
+        "version": 0,
+        "self_test": 0,
+        "valid_json": 0,
+        "duplicate_key": 1,
+        "missing_argument": 2
+      },
+      "scope": "downloaded final x64 ZIP and ran CLI diagnostics; no checkout, rebuild or GUI test"
+    }
   },
   "not_verified": [
-    "Windows 1.1.1 x64 final attachment CI (old preview-1 CI does not transfer)",
+    "Windows x64 desktop minimal GUI interaction on the same downloaded 1.1.1 ZIP; formal promotion gate pending",
     "Windows native MSVC build",
     "Windows x64/ARM64 GUI, splitter visual, IME, DPI, hardware acceptance",
     "Mac minimum macOS 13 and physical Intel device",
@@ -127,6 +159,16 @@
   "formal_promotion": {
     "normal_macos_save_gate": "passed",
     "overall_ready": false,
-    "reason": "Local assets are prepared, but new Windows final-attachment CI and authorized remote prerelease have not happened; old AX observation remains open and full GUI/device coverage is limited."
+    "reason": "Prerelease and final x64 attachment Windows Server CLI passed, but the same downloaded x64 ZIP has not completed Windows desktop open/edit-save-reopen/invalid-input/language/splitter interaction; historic AX direct-value immediate-save path remains untested."
+  },
+  "published_prerelease": {
+    "release_id": 397006329,
+    "url": "https://github.com/muyuzy123-pixel/json-dictionary-editor/releases/tag/v1.1.1",
+    "published_at_utc": "2026-09-26T00:53:39Z",
+    "tag_commit": "e9aa80312567baa43a34a26593c2001803ecca0e",
+    "main_at_publication": "14001d7c08de5ff3025bbda6ad1d9db706b0ee92",
+    "draft_four_asset_digest_readback": "passed",
+    "anonymous_four_asset_sha256_download": "passed",
+    "old_preview_release_and_assets_unchanged": true
   }
 }
