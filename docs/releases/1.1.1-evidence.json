@@ -91,6 +91,20 @@
       "formal_normal_save_gate": "passed",
       "historic_AX_hang_status": "not retested; not claimed fixed"
     },
+    "macos_isolated_language_regression": {
+      "source_zip_sha256": "2b09623c940075b61fcfee26612a16f97d124c05c018df63067e3369c0255c0f",
+      "qa_copy_change": "temporary Bundle ID and ad-hoc re-sign only; release ZIP unchanged",
+      "sequence": ["简体中文", "English", "跟随系统", "quit", "relaunch"],
+      "ui_labels_changed": true,
+      "unapplied_version_draft": "42",
+      "model_and_disk_version": 1,
+      "draft_retained_across_language_switch": true,
+      "language_preference_after_relaunch": "system",
+      "system_primary_language": "zh-Hans-CN",
+      "independent_sample_sha256_before_after": "0a39a0cf8b7b6a48ff8f73d7ded0451a9c66a6d6871d14e0cd04baf7295a77a5",
+      "original_app_preferences_sha256_before_after": "a7141751b87c639cd6427f72634368c60d5384173cc8ec23207de17a2df2232c",
+      "scope": "local Mac final-ZIP copy UI interaction; not complete GUI acceptance"
+    },
     "windows_core_optimized_assertions": 90,
     "windows_core_asan_ubsan_assertions": 90,
     "windows_required_ui_keys": 119,
