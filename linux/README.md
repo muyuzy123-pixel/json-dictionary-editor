@@ -101,3 +101,13 @@ availability and produce Ubuntu24.04 amd64 .deb with separately recorded install
 uninstall/smoke. Qt stays dynamic, original icon/MIT retained.
 No main/tag/release/other-platform writes. AppImage deferred; its unexecuted
 pins are not packaging or bundled-library license/source compliance evidence.
+
+After preserving and independently reading back the runnable verified build:
+
+    python3 linux/packaging/pack_deb.py
+
+The target-gated packager requires a clean source commit, rebuilds/checks/smokes,
+and uses dpkg-shlibdeps plus explicit QPA/Wayland plugin dependencies. It includes
+the original icon, MIT copyright, English sample and source/binary build-info;
+no Qt libraries, test binaries or fault interposer are bundled. Package generation
+does not certify real desktop behavior or dependency installation on a clean host.

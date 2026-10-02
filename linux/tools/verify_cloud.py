@@ -69,6 +69,7 @@ if before!=after:raise SystemExit('Protected source changed')
 run('final-protected-diff.log',['git','diff','--exit-code',fixed,'--','macos','windows','tests','LICENSE'])
 status=subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)
 if status:raise SystemExit('Source changed during verification: '+status)
-source={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted((root/'linux').rglob('*')) if path.is_file()};binary=root/'.build/linux-gui/qt/json-dictionary-editor'
+tracked_linux=subprocess.check_output(['git','ls-files','-z','--','linux'],cwd=root).split(b'\0')
+source={path.decode():hashlib.sha256((root/path.decode()).read_bytes()).hexdigest() for path in tracked_linux if path};binary=root/'.build/linux-gui/qt/json-dictionary-editor'
 (logs/'source-final.json').write_text(json.dumps({'commit':head,'linux_sha256':source,'protected_sha256':after,'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'status':status},indent=2)+'\n')
 print('CLOUD_CHECKS_OK commit='+head+' target='+str(target)+' automatic only; desktop and durability not accepted')
