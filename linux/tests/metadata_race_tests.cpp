@@ -8,6 +8,7 @@
 #include <QtEndian>
 #include <sys/xattr.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <cerrno>
 #include <cstring>
 #include <iostream>
@@ -20,7 +21,7 @@ QByteArray aclBytes(){
  QByteArray bytes;auto append16=[&](quint16 n){n=qToLittleEndian(n);bytes.append(reinterpret_cast<const char*>(&n),2);};
  auto append32=[&](quint32 n){n=qToLittleEndian(n);bytes.append(reinterpret_cast<const char*>(&n),4);};
  append32(2);const auto entry=[&](quint16 tag,quint16 permission,quint32 id){append16(tag);append16(permission);append32(id);};
- entry(1,6,0xffffffffu);entry(2,4,12345);entry(4,4,0xffffffffu);entry(16,4,0xffffffffu);entry(32,4,0xffffffffu);return bytes;
+ entry(1,6,0xffffffffu);entry(2,4,static_cast<quint32>(::geteuid()));entry(4,4,0xffffffffu);entry(16,4,0xffffffffu);entry(32,4,0xffffffffu);return bytes;
 }
 void putAttribute(const QString& path,const char* name,const QByteArray& value){
  if(::setxattr(QFile::encodeName(path).constData(),name,value.constData(),static_cast<size_t>(value.size()),0)<0){
@@ -94,4 +95,3 @@ int main(int argc,char** argv){
  }catch(const UnsupportedFixture& e){std::cerr<<"METADATA_FIXTURE_UNSUPPORTED: "<<e.what()<<'\n';return 77;}
  catch(const std::exception& e){std::cerr<<"METADATA_RACE_FAILED: "<<e.what()<<'\n';return 1;}
 }
-
