@@ -66,7 +66,9 @@ QString errorText(const std::exception& error) {
     if (const auto* file = dynamic_cast<const FileError*>(&error)) {
         QString text;
         switch (file->type) {
-            case FileFailure::Conflict: text = ui("The file changed outside the editor. Nothing was silently overwritten."); break;
+            case FileFailure::Conflict: text = file->committed
+                ? ui("A competing version was replaced; the recovery copy is retained. The document remains unsaved.")
+                : ui("The file changed outside the editor. Nothing was silently overwritten."); break;
             case FileFailure::UnsupportedAtomicSave: text = ui("This filesystem or target does not support the required atomic save. Direct overwrite is disabled."); break;
             case FileFailure::Symlink: text = ui("Symbolic-link targets are not supported."); break;
             case FileFailure::Hardlink: text = ui("Hard-linked targets are not supported."); break;

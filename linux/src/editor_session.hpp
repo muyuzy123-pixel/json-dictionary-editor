@@ -17,6 +17,7 @@ struct InspectorDraft {
     std::optional<std::string> key;
     std::optional<std::string> value;
     jsondict::Kind kind = jsondict::Kind::String;
+    std::optional<bool> boolean;
 };
 
 class EditorSession {

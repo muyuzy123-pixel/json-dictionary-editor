@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=JSON Dictionary Editor
+Name[zh_CN]=JSON 字典编辑器
+Comment=Edit ordered JSON dictionaries without changing number text
+Comment[zh_CN]=编辑有序 JSON 字典并保留数字原始文本
+Exec=json-dictionary-editor %f
+Icon=json-dictionary-editor
+Terminal=false
+Categories=Development;Utility;
+MimeType=application/json;
+StartupWMClass=JSONDictionaryEditor

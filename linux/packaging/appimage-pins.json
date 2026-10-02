@@ -1,0 +1,26 @@
+{
+  "status": "unexecuted recovery metadata; AppImage bundler not implemented",
+  "target": "Ubuntu 24.04 x86_64 only",
+  "appimagetool": {
+    "asset_id": 324406882,
+    "sha256": "a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0",
+    "source_commit": "8c8c91f762b412a19f4e8d2c4b35afb98f2d7c81",
+    "url": "https://api.github.com/repos/AppImage/appimagetool/releases/assets/324406882"
+  },
+  "runtime": {
+    "asset_id": 596078161,
+    "sha256": "156f4bdbde9c52d01814600013e0a273f0118dc2de98975f3c8c63427ec79074",
+    "source_commit": "8f39b89e2ac31e1640b3d3f7e9a5108e6ce805fa",
+    "url": "https://api.github.com/repos/AppImage/type2-runtime/releases/assets/596078161"
+  },
+  "requirements": [
+    "Verify pinned tool/runtime hashes before execution",
+    "Bundle dynamic Qt only; retain replaceable shared libraries",
+    "Enumerate every copied ELF library/plugin and exact binary/source package version",
+    "Include package copyright and complete license/exception texts",
+    "Provide exact corresponding source access for LGPL libraries and static runtime dependencies",
+    "Explicitly permit library replacement and debugging of modifications",
+    "Test AppImage extraction and launch separately from FUSE mounting",
+    "No all-distribution/architecture or sandbox-package expansion"
+  ]
+}

@@ -2,6 +2,15 @@
 #include <stdexcept>
 
 namespace jsondict_linux {
+namespace {
+std::size_t inspector_units(std::string_view text) {
+    if (!jsondict::is_valid_utf8(text)) throw std::runtime_error("Invalid UTF-8 text.");
+    std::size_t units = 0;
+    for (const unsigned char byte : text)
+        if ((byte & 0xc0) != 0x80) units += byte >= 0xf0 ? 2u : 1u;
+    return units;
+}
+}
 
 void EditorSession::check_limits(const jsondict::Document& candidate, bool bom) {
     jsondict::validate(candidate.root(), true);
@@ -49,6 +58,12 @@ bool EditorSession::mutate(const std::function<bool(jsondict::Document&)>& opera
 }
 
 bool EditorSession::apply_draft(const InspectorDraft& draft) {
+    const auto* selected_node = document.find(selected);
+    if (!selected_node) throw std::runtime_error("The selected node no longer exists.");
+    if (draft.key && inspector_units(*draft.key) > kMaximumKeyCharacters)
+        throw std::runtime_error("The key draft exceeds 65,535 characters. Use Raw JSON.");
+    if (draft.value && inspector_units(*draft.value) > kMaximumInspectorCharacters)
+        throw std::runtime_error("The inspector draft exceeds 1,048,576 characters. Use Raw JSON.");
     auto candidate = document;
     if (draft.key && !candidate.rename_node(selected, *draft.key))
         throw std::runtime_error("This key already exists in the object.");
@@ -60,6 +75,11 @@ bool EditorSession::apply_draft(const InspectorDraft& draft) {
         if (draft.kind == jsondict::Kind::String) success = candidate.set_string(selected, *draft.value);
         if (draft.kind == jsondict::Kind::Number) success = candidate.set_number(selected, *draft.value);
         if (!success) throw std::runtime_error("Enter a valid JSON number.");
+    }
+    if (draft.boolean) {
+        if (draft.kind != jsondict::Kind::Boolean || selected_node->kind() != draft.kind ||
+            !candidate.set_boolean(selected, *draft.boolean))
+            throw std::runtime_error("The selected node changed before the draft was applied.");
     }
     check_limits(candidate, utf8_bom);
     if (jsondict::equivalent(document.root(), candidate.root())) return false;

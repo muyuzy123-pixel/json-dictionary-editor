@@ -1,0 +1,4 @@
+<RCC><qresource prefix="/i18n">
+<file alias="editor_en.qm">@CMAKE_CURRENT_BINARY_DIR@/editor_en.qm</file>
+<file alias="editor_zh_CN.qm">@CMAKE_CURRENT_BINARY_DIR@/editor_zh_CN.qm</file>
+</qresource></RCC>

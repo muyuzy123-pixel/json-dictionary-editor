@@ -1,0 +1,4 @@
+<RCC>
+<qresource prefix="/sample"><file alias="SampleDictionary.json">../../windows/resources/SampleDictionary.json</file></qresource>
+<qresource prefix="/icons"><file alias="json-dictionary-editor.png">../resources/json-dictionary-editor.png</file></qresource>
+</RCC>

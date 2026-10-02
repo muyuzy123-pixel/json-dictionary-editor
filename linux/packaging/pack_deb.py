@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""UNEXECUTED RECOVERY DRAFT: target-only .deb, after build/tests."""
+import argparse,json,os,platform,shutil,subprocess,tempfile
+from pathlib import Path
+root=Path(__file__).resolve().parents[2]
+p=argparse.ArgumentParser();p.add_argument('--build',default='.build/linux-gui');p.add_argument('--output',default='.build/dist');args=p.parse_args()
+release=dict(line.strip().split('=',1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
+if release.get('ID','').strip('"')!='ubuntu' or release.get('VERSION_ID','').strip('"')!='24.04' or platform.machine()!='x86_64':
+ raise SystemExit('Packaging requires actual Ubuntu 24.04 x86_64; host checks cannot replace this gate')
+build=(root/args.build).resolve();out=(root/args.output).resolve();out.mkdir(parents=True,exist_ok=True)
+subprocess.run(['cmake','--build',str(build),'-j2'],check=True)
+env=dict(os.environ,QT_QPA_PLATFORM='offscreen')
+subprocess.run(['ctest','--test-dir',str(build),'--output-on-failure'],env=env,check=True)
+subprocess.run([str(build/'qt/json-dictionary-editor'),'--smoke-test'],env=env,check=True)
+with tempfile.TemporaryDirectory(prefix='jde-deb-',dir=out) as temp:
+ stage=Path(temp)/'root';stage.mkdir()
+ subprocess.run(['cmake','--install',str(build),'--prefix','/usr'],env=dict(os.environ,DESTDIR=str(stage)),check=True)
+ work=Path(temp)/'metadata';(work/'debian').mkdir(parents=True)
+ (work/'debian/control').write_text('Source: json-dictionary-editor\nSection: editors\nPriority: optional\nMaintainer: JSON Dictionary Editor contributors\n\nPackage: json-dictionary-editor\nArchitecture: amd64\nDescription: Ordered JSON dictionary editor\n')
+ result=subprocess.check_output(['dpkg-shlibdeps','-O','-e'+str(stage/'usr/bin/json-dictionary-editor')],cwd=work,text=True)
+ depends=next(line.split('=',1)[1] for line in result.splitlines() if line.startswith('shlibs:Depends='))
+ control=stage/'DEBIAN';control.mkdir()
+ (control/'control').write_text('Package: json-dictionary-editor\nVersion: 1.1.1-0linux1\nArchitecture: amd64\nMaintainer: JSON Dictionary Editor contributors\nSection: editors\nPriority: optional\nDepends: '+depends+'\nRecommends: fonts-noto-cjk, fonts-noto-color-emoji\nDescription: JSON dictionary editor for Ubuntu 24.04\n Preserves object order and original number text; dynamically linked Qt 6 Widgets.\n')
+ subprocess.run(['desktop-file-validate',str(stage/'usr/share/applications/json-dictionary-editor.desktop')],check=True)
+ target=out/'json-dictionary-editor_1.1.1-0linux1_amd64.deb'
+ subprocess.run(['dpkg-deb','--root-owner-group','--build',str(stage),str(target)],check=True)
+print(target)
+print('Generated package still requires install/uninstall and actual desktop acceptance')
