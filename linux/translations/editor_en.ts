@@ -29,6 +29,7 @@
 <message><source>Empty Object</source><translation>Empty Object</translation></message>
 <message><source>Enter a valid JSON number.</source><translation>Enter a valid JSON number.</translation></message>
 <message><source>Error</source><translation>Error</translation></message>
+<message><source>Exit after the window and event loop start (automation only).</source><translation>Exit after the window and event loop start (automation only).</translation></message>
 <message><source>Expand All</source><translation>Expand All</translation></message>
 <message><source>Expected ',' between members or elements.</source><translation>Expected ',' between members or elements.</translation></message>
 <message><source>Expected ':' after object key.</source><translation>Expected ':' after object key.</translation></message>

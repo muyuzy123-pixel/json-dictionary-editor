@@ -29,6 +29,7 @@
 <message><source>Empty Object</source><translation>空对象</translation></message>
 <message><source>Enter a valid JSON number.</source><translation>请输入有效的 JSON 数字。</translation></message>
 <message><source>Error</source><translation>错误</translation></message>
+<message><source>Exit after the window and event loop start (automation only).</source><translation>窗口与事件循环启动后退出（仅用于自动化）。</translation></message>
 <message><source>Expand All</source><translation>全部展开</translation></message>
 <message><source>Expected ',' between members or elements.</source><translation>成员或元素之间需要逗号。</translation></message>
 <message><source>Expected ':' after object key.</source><translation>对象键后需要冒号。</translation></message>

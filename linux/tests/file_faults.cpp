@@ -22,6 +22,7 @@ bool scoped(int fd){
 bool regular(int fd){struct stat st{};return ::fstat(fd,&st)==0&&S_ISREG(st.st_mode);}
 }
 extern "C" int jde_fault_hits(){return hits.load();}
+extern "C" void jde_fault_reset(){hits=0;dirFlushes=0;writes=0;}
 extern "C" ssize_t write(int fd,const void* buffer,size_t size){
  static auto real=reinterpret_cast<ssize_t(*)(int,const void*,size_t)>(dlsym(RTLD_NEXT,"write"));
  if(scoped(fd)&&regular(fd)){
