@@ -1,5 +1,6 @@
 #include "editor_window.hpp"
 #include <QApplication>
+#include <QDir>
 #include <QFile>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -44,7 +45,7 @@ private slots:
   if(destination==2){QFile external(target);QVERIFY(external.open(QIODevice::WriteOnly));QCOMPARE(external.write(oldBytes),oldBytes.size());external.close();}
   const QByteArray actualOld=destination==1?QByteArray{}:FileStore::read(target).bytes;
   if(draft){key->setText("pending_key");value->setPlainText("pending value\n🙂");QTextCursor cursor=value->textCursor();cursor.setPosition(2);cursor.setPosition(7,QTextCursor::KeepAnchor);value->setTextCursor(cursor);}
-  search->setText("number");const auto before=w.session().encoded(),selected=w.session().selected;const auto keyText=key->text(),valueText=value->toPlainText();
+  search->setText("number");const auto before=w.session().encoded();const auto selected=w.session().selected;const auto keyText=key->text(),valueText=value->toPlainText();
   const int position=value->textCursor().position(),anchor=value->textCursor().anchor();QPersistentModelIndex index(w.findChild<QTreeView*>("treeView")->currentIndex());
   QString message,titleAtError,statusAtError;bool draftAtError=false;
   w.errorHandler=[&](const QString& text){message=text;titleAtError=w.windowTitle();statusAtError=w.statusBar()->currentMessage();draftAtError=w.hasDraft();};
@@ -74,4 +75,3 @@ private slots:
 };
 QTEST_MAIN(SaveStateTests)
 #include "save_state_tests.moc"
-
