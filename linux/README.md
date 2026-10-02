@@ -38,6 +38,8 @@ Core OFF never finds or links Qt. verify_cloud.py performs core first, then GUI,
 all CTest groups, offscreen and optional supervised TCP Xvfb xcb checks. It saves
 complete logs, command exits, per-test inventories, JUnit/QtTest XML, protected
 hashes, clean HEAD and binary hash in .build/evidence/verified.
+QtTest XML must be well formed, contain successful cleanupTestCase, and have no
+failed/skipped incidents. Exit zero alone does not pass this completeness gate.
 The script does not replace the external preservation preflight.
 Fixture exit 77 is a skip, not a pass. Original icon PNG is extracted/hash checked;
 the shared English sample is bundled directly.

@@ -22,6 +22,8 @@ class SaveStateTests:public QObject{
  static jsondict::NodeId stringNode(const EditorWindow& w){return w.session().document.root().as_object().at(0).value.id();}
 private slots:
  void initTestCase(){
+  // Each row destroys its own top-level windows. Only QtTest owns application exit.
+  QApplication::setQuitOnLastWindowClosed(false);
   QVERIFY(settings_.isValid());QCoreApplication::setOrganizationName("JDESaveState");QCoreApplication::setApplicationName("Test");
   QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,settings_.path());
   qInfo()<<"Qt"<<qVersion()<<"backend"<<QGuiApplication::platformName()<<"AUTOMATION_ONLY";

@@ -2,6 +2,7 @@
 """Core-first exact-commit verification. External preservation is a separate preflight."""
 import argparse,datetime,hashlib,json,os,platform,shutil,subprocess,time,xml.etree.ElementTree as ET
 from pathlib import Path
+from qt_test_results import verify_xml
 root=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser();p.add_argument('--fresh',action='store_true');p.add_argument('--xvfb',action='store_true');p.add_argument('--logs',default='.build/evidence/verified');a=p.parse_args()
 logs=(root/a.logs).resolve();logs.mkdir(parents=True,exist_ok=True);runtime=logs/'runtime';runtime.mkdir(exist_ok=True);runtime.chmod(0o700)
@@ -59,7 +60,9 @@ shutil.copy(root/'.build/linux-gui/Testing/Temporary/LastTest.log',logs/'gui-Las
 inventory(root/'.build/linux-gui',logs/'gui-junit.xml','gui-inventory.json','offscreen')
 run('offscreen-smoke.log',['.build/linux-gui/qt/json-dictionary-editor','--smoke-test'],env,'offscreen')
 run('offscreen-interactions.log',['.build/linux-gui/qt/jsondict_interaction_tests','-v2','-o',str(logs/'interactions.xml')+',xml'],env,'offscreen')
+verify_xml(logs/'interactions.xml',logs/'interactions-inventory.json','offscreen')
 run('offscreen-save-state.log',['.build/linux-gui/qt/jsondict_save_state_tests','-v2','-o',str(logs/'save-state.xml')+',xml'],dict(env,LD_PRELOAD=str(root/'.build/linux-gui/qt/libjsondict_file_faults.so')),'offscreen')
+verify_xml(logs/'save-state.xml',logs/'save-state-inventory.json','offscreen')
 if a.xvfb:run('xvfb-supervisor.log',['python3','linux/tools/verify_xvfb_tcp.py','--logs',str(logs/'xcb')],backend='xcb/Xvfb')
 after=protected();(logs/'protected-after.json').write_text(json.dumps(after,indent=2)+'\n')
 if before!=after:raise SystemExit('Protected source changed')

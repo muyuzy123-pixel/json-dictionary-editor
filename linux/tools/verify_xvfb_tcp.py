@@ -2,6 +2,7 @@
 """Supervised TCP Xvfb automation; no real desktop acceptance."""
 import argparse,datetime,json,os,socket,subprocess,time
 from pathlib import Path
+from qt_test_results import verify_xml
 p=argparse.ArgumentParser();p.add_argument('--build',default='.build/linux-gui');p.add_argument('--logs',default='.build/evidence/xcb');a=p.parse_args()
 root=Path(__file__).resolve().parents[2];build=(root/a.build).resolve();logs=(root/a.logs).resolve();logs.mkdir(parents=True,exist_ok=True);runtime=logs/'runtime';runtime.mkdir(exist_ok=True);runtime.chmod(0o700)
 display=None
@@ -28,6 +29,9 @@ try:
   with (logs/name).open('w') as f:r=subprocess.run(args,env=environment,stdout=f,stderr=subprocess.STDOUT,timeout=120)
   with (logs/'commands.jsonl').open('a') as f:f.write(json.dumps({'command':args,'exit_code':r.returncode,'backend':'xcb/Xvfb TCP','display':env['DISPLAY'],'started':started,'log':name})+'\n')
   if r.returncode:raise SystemExit(name+' failed; raw log retained')
+  if name!='xcb-smoke.log':
+   stem='interactions' if name=='xcb-interactions.log' else 'save-state'
+   verify_xml(logs/(stem+'.xml'),logs/(stem+'-inventory.json'),'xcb/Xvfb TCP')
  print('XVFB_TCP_OK: smoke, interactions and save-state; AUTOMATION_ONLY')
 finally:
  server.terminate()
