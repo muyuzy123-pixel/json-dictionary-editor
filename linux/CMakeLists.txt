@@ -1,0 +1,45 @@
+cmake_minimum_required(VERSION 3.22)
+project(JSONDictionaryEditorLinux VERSION 1.1.1 LANGUAGES CXX)
+
+option(JDE_BUILD_GUI "Build the Linux Qt Widgets editor" OFF)
+option(JDE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+set(JDE_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../windows/src" CACHE PATH "Existing 1.1.1 json_core sources")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+enable_testing()
+
+add_library(jsondict_core STATIC "${JDE_CORE_DIR}/json_core.cpp")
+target_include_directories(jsondict_core PUBLIC "${JDE_CORE_DIR}")
+target_compile_options(jsondict_core PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_library(jsondict_session STATIC src/editor_session.cpp)
+target_include_directories(jsondict_session PUBLIC src)
+target_link_libraries(jsondict_session PUBLIC jsondict_core)
+target_compile_options(jsondict_session PRIVATE -Wall -Wextra -Wpedantic -Werror)
+if(JDE_SANITIZERS)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+    target_compile_options(jsondict_core PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_compile_options(jsondict_session PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+endif()
+
+add_executable(jsondict_core_tests "${JDE_CORE_DIR}/core_self_test.cpp")
+target_link_libraries(jsondict_core_tests PRIVATE jsondict_core)
+add_test(NAME existing_1_1_1_core COMMAND jsondict_core_tests)
+add_executable(jsondict_session_tests tests/session_tests.cpp)
+target_link_libraries(jsondict_session_tests PRIVATE jsondict_session)
+add_test(NAME linux_session_regression COMMAND jsondict_session_tests)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../tests/adapters/cpp_adapter.cpp")
+    add_executable(jsondict_cpp_adapter ../tests/adapters/cpp_adapter.cpp)
+    target_link_libraries(jsondict_cpp_adapter PRIVATE jsondict_core)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME shared_cpp_fixtures COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../tests/run_shared.py"
+        --cpp-adapter $<TARGET_FILE:jsondict_cpp_adapter>
+        --report "${CMAKE_BINARY_DIR}/shared-cpp-results.json")
+endif()
+
+if(JDE_BUILD_GUI)
+    add_subdirectory(qt)
+endif()
