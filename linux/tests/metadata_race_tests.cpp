@@ -9,6 +9,7 @@
 #include <sys/xattr.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <cerrno>
 #include <cstring>
 #include <iostream>
@@ -64,8 +65,14 @@ int main(int argc,char** argv){
    if(step!=stage)return;
    injectedPath=(temp||backup)?temporary(dir.path()):path;
    if(!inherited){
-    if(change)putAttribute(injectedPath,name,"first-value");
-    putAttribute(injectedPath,name,value);
+    if(test.contains("process_")){
+     const auto pid=::fork();require(pid>=0,"cannot fork metadata competitor");
+     if(pid==0){try{putAttribute(injectedPath,name,value);::_exit(0);}catch(...){::_exit(1);}}
+     int status=0;require(::waitpid(pid,&status,0)==pid&&WIFEXITED(status)&&WEXITSTATUS(status)==0,"metadata competitor failed");
+    }else{
+     if(change)putAttribute(injectedPath,name,"first-value");
+     putAttribute(injectedPath,name,value);
+    }
    }
    require(attribute(injectedPath,name)==value,"real mutation not observed");
    if(acl){struct stat st{};require(::stat(QFile::encodeName(injectedPath).constData(),&st)==0,"ACL stat failed");require((st.st_mode&0777)==0644,"ACL fixture must preserve basic mode bits");}
@@ -89,7 +96,7 @@ int main(int argc,char** argv){
     if(backup||(!temp&&!after))require(attribute(error.backup,name)==value,"actual replaced metadata not retained");
     else require(attribute(path,name)==value,"new target's actual metadata not retained");
    }
-   std::cout<<"METADATA_RACE_OK case="<<test.toStdString()<<" committed="<<error.committed<<" actual_mutation_verified=1 recovery="<<!error.backup.isEmpty()<<" mode_preserved="<<acl<<" AUTOMATION_ONLY\n";
+   std::cout<<"METADATA_RACE_OK case="<<test.toStdString()<<" committed="<<error.committed<<" actual_mutation_verified=1 recovery="<<!error.backup.isEmpty()<<" mode_preserved="<<acl<<" separate_process="<<test.contains("process_")<<" AUTOMATION_ONLY\n";
    return 0;
   }
  }catch(const UnsupportedFixture& e){std::cerr<<"METADATA_FIXTURE_UNSUPPORTED: "<<e.what()<<'\n';return 77;}

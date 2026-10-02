@@ -133,5 +133,9 @@
   "View": "视图",
   "A competing version was replaced; the recovery copy is retained. The document remains unsaved.": "已替换一个竞争版本；恢复副本已保留。文档保持未保存状态。",
   "Saved. Replaced versions remain as .jsondict-backup-* recovery files.": "已保存。被替换版本保留为 .jsondict-backup-* 恢复文件。",
-  "Exit after the window and event loop start (automation only).": "窗口与事件循环启动后退出（仅用于自动化）。"
+  "Exit after the window and event loop start (automation only).": "窗口与事件循环启动后退出（仅用于自动化）。",
+  "Document remains unsaved.": "文档仍未保存。",
+  "Target file: %1": "实际目标文件：%1",
+  "No previous version was available; the new target may already exist.": "此目标没有可恢复的旧版本；新文件可能已经存在。",
+  "A previous save to this target had an uncertain commit. Reopen and inspect it, or save to a different file.": "先前向此目标的保存提交状态不确定。请重新打开并检查，或另存到其他文件。"
 }

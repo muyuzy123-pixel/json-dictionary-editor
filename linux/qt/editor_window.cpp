@@ -107,13 +107,15 @@ void EditorWindow::rebuild(){
  for(const auto id:expanded)tree_->setExpanded(model_->indexForId(id),true);
  tree_->setExpanded(model_->indexForId(session_.document.root_id()),true);tree_->setCurrentIndex(model_->indexForId(session_.selected));tree_->verticalScrollBar()->setValue(vertical);tree_->horizontalScrollBar()->setValue(horizontal);loadInspector();updating_=false;updateSearch();refreshState();
 }
-void EditorWindow::fail(const std::exception& error){if(errorHandler)errorHandler(errorText(error));else QMessageBox::critical(this,ui("Error"),errorText(error));refreshState();}
+void EditorWindow::fail(const std::exception& error){refreshState();if(errorHandler)errorHandler(errorText(error));else QMessageBox::critical(this,ui("Error"),errorText(error));}
+InspectorDraft EditorWindow::inspectorDraft()const{
+ InspectorDraft draft;const auto* node=session_.document.find(session_.selected);if(!node)throw std::runtime_error("The selected node no longer exists.");
+ draft.kind=node->kind();if(key_->isEnabled()&&key_->text()!=baseKey_)draft.key=checkedUtf8(key_->text());if(value_->isEnabled()&&value_->toPlainText()!=baseValue_)draft.value=checkedUtf8(value_->toPlainText());if(boolean_->isEnabled()&&boolean_->isChecked()!=baseBoolean_)draft.boolean=boolean_->isChecked();return draft;
+}
 bool EditorWindow::applyDraft(){
  if(!hasDraft())return true;
  try{
-  InspectorDraft draft;const auto* node=session_.document.find(session_.selected);if(!node)throw std::runtime_error("The selected node no longer exists.");
-  draft.kind=node->kind();if(key_->isEnabled()&&key_->text()!=baseKey_)draft.key=checkedUtf8(key_->text());if(value_->isEnabled()&&value_->toPlainText()!=baseValue_)draft.value=checkedUtf8(value_->toPlainText());if(boolean_->isEnabled()&&boolean_->isChecked()!=baseBoolean_)draft.boolean=boolean_->isChecked();
-  session_.apply_draft(draft);rebuild();return true;
+  session_.apply_draft(inspectorDraft());rebuild();return true;
  }catch(const std::exception& error){fail(error);return false;}
 }
 void EditorWindow::discardDraft(){loadInspector();}
@@ -153,31 +155,52 @@ bool EditorWindow::perform(const QString& operation){
  }catch(const std::exception& error){fail(error);return false;}
 }
 bool EditorWindow::resolveUnsaved(){
- if(!session_.dirty)return true;
+ // Resolve against a candidate. Save/Cancel cannot consume the live draft.
+ std::optional<DraftDecision> draft;
+ try{
+  auto candidate=session_;
+  if(hasDraft()){
+   draft=draftDecision?draftDecision():askDraft(this);
+   if(*draft==DraftDecision::Cancel)return false;
+   if(*draft==DraftDecision::Apply)candidate.apply_draft(inspectorDraft());
+  }
+  if(!candidate.dirty)return true;
+ }catch(const std::exception& error){fail(error);return false;}
  UnsavedDecision decision;if(unsavedDecision)decision=unsavedDecision();else{
   QMessageBox box(QMessageBox::Question,ui("Unsaved document"),ui("Save changes before continuing?"),QMessageBox::NoButton,this);
   auto* saveButton=box.addButton(ui("Save"),QMessageBox::AcceptRole);auto* discardButton=box.addButton(ui("Discard"),QMessageBox::DestructiveRole);auto* cancelButton=box.addButton(ui("Cancel"),QMessageBox::RejectRole);box.setDefaultButton(cancelButton);box.setEscapeButton(cancelButton);box.exec();
   decision=box.clickedButton()==saveButton?UnsavedDecision::Save:box.clickedButton()==discardButton?UnsavedDecision::Discard:UnsavedDecision::Cancel;
  }
- return decision==UnsavedDecision::Save?save():decision==UnsavedDecision::Discard;
+ if(decision!=UnsavedDecision::Save)return decision==UnsavedDecision::Discard;
+ savingDraftDecision_=draft;const bool saved=save();savingDraftDecision_.reset();return saved;
 }
 bool EditorWindow::loadBytes(std::string_view bytes){
- if(!resolveDraft()||!resolveUnsaved())return false;
- try{session_.load(bytes);path_.clear();baseline_.reset();rebuild();return true;}catch(const std::exception& error){fail(error);return false;}
+ if(!resolveUnsaved())return false;
+ try{session_.load(bytes);path_.clear();baseline_.reset();uncertainTargets_.clear();rebuild();return true;}catch(const std::exception& error){fail(error);return false;}
 }
 bool EditorWindow::openPath(const QString& path){
- if(!resolveDraft()||!resolveUnsaved())return false;
- try{const auto snapshot=FileStore::read(path);session_.load(std::string_view(snapshot.bytes.constData(),static_cast<std::size_t>(snapshot.bytes.size())));path_=QFileInfo(path).absoluteFilePath();baseline_=snapshot.stamp;rebuild();return true;}catch(const std::exception& error){fail(error);return false;}
+ if(!resolveUnsaved())return false;
+ try{const auto snapshot=FileStore::read(path);session_.load(std::string_view(snapshot.bytes.constData(),static_cast<std::size_t>(snapshot.bytes.size())));path_=QFileInfo(path).absoluteFilePath();baseline_=snapshot.stamp;uncertainTargets_.clear();rebuild();return true;}catch(const std::exception& error){fail(error);return false;}
 }
 void EditorWindow::open(){const auto path=QFileDialog::getOpenFileName(this,ui("Open JSON"),path_,ui("JSON files (*.json);;All files (*)"));if(!path.isEmpty())openPath(path);}
 bool EditorWindow::newDocument(){return loadBytes("{}\n");}
 bool EditorWindow::saveTo(const QString& path,bool replaceApproved,const SaveOptions& options){
- if(!resolveDraft())return false;
+ const auto absolute=QFileInfo(path).absoluteFilePath();
  try{
-  const auto absolute=QFileInfo(path).absoluteFilePath();const auto expected=absolute==path_?baseline_:replaceApproved?FileStore::probe(absolute):std::nullopt;const auto bytes=session_.encoded();
-  const auto stamp=FileStore::save(absolute,QByteArray(bytes.data(),static_cast<qsizetype>(bytes.size())),expected,options);
-  baseline_=stamp;path_=absolute;session_.dirty=false;refreshState();statusBar()->showMessage(ui("Saved. Replaced versions remain as .jsondict-backup-* recovery files."),10000);return true;
- }catch(const FileError& error){if(error.committed)session_.dirty=true;fail(error);return false;}catch(const std::exception& error){fail(error);return false;}
+  if(uncertainTargets_.contains(absolute))throw FileError(FileFailure::Verification,QStringLiteral("Uncertain previous save"),0,false,uncertainTargets_.value(absolute),absolute);
+  const bool pending=hasDraft();DraftDecision decision=DraftDecision::Discard;auto candidate=session_;
+  if(pending){decision=savingDraftDecision_?*savingDraftDecision_:draftDecision?draftDecision():askDraft(this);if(decision==DraftDecision::Cancel)return false;if(decision==DraftDecision::Apply)candidate.apply_draft(inspectorDraft());}
+  const auto expected=absolute==path_?baseline_:replaceApproved?FileStore::probe(absolute):std::nullopt;const auto bytes=candidate.encoded();
+  const auto effective=options.hook?options:saveOptionsForTarget?saveOptionsForTarget(absolute):options;
+  const auto stamp=FileStore::save(absolute,QByteArray(bytes.data(),static_cast<qsizetype>(bytes.size())),expected,effective);
+  baseline_=stamp;path_=absolute;
+  if(pending&&decision==DraftDecision::Apply){session_=std::move(candidate);session_.dirty=false;rebuild();}
+  else{session_.dirty=false;if(pending)discardDraft();refreshState();}
+  statusBar()->showMessage(ui("Saved. Replaced versions remain as .jsondict-backup-* recovery files."),10000);return true;
+ }catch(const FileError& error){
+  if(error.committed){session_.dirty=true;uncertainTargets_.insert(absolute,error.backup);if(absolute==path_)baseline_.reset();}
+  const FileError annotated(error.type,error.operation,error.system_error,error.committed,error.backup,absolute);fail(annotated);return false;
+ }catch(const std::exception& error){fail(error);return false;}
 }
 bool EditorWindow::save(bool saveAs){
  if(!saveAs&&!path_.isEmpty())return saveTo(path_);
@@ -192,7 +215,7 @@ void EditorWindow::showRaw(bool wholeDocument){
  try{RawDialog raw(session_,wholeDocument?session_.document.root_id():session_.selected,languages_,this);raw.exec();rebuild();}catch(const std::exception& error){fail(error);}
 }
 void EditorWindow::closeEvent(QCloseEvent* event){
- if(!resolveDraft()||!resolveUnsaved()){event->ignore();return;}
+ if(!resolveUnsaved()){event->ignore();return;}
  QSettings settings;settings.setValue("windowGeometry",saveGeometry());settings.sync();event->accept();
 }
 }

@@ -8,6 +8,7 @@
 <message><source>%1 matches</source><translation>%1 个匹配</translation></message>
 <message><source>%1 nodes · %2</source><translation>%1 个节点 · %2</translation></message>
 <message><source>A competing version was replaced; the recovery copy is retained. The document remains unsaved.</source><translation>已替换一个竞争版本；恢复副本已保留。文档保持未保存状态。</translation></message>
+<message><source>A previous save to this target had an uncertain commit. Reopen and inspect it, or save to a different file.</source><translation>先前向此目标的保存提交状态不确定。请重新打开并检查，或另存到其他文件。</translation></message>
 <message><source>About</source><translation>关于</translation></message>
 <message><source>Add</source><translation>添加</translation></message>
 <message><source>Apply</source><translation>应用</translation></message>
@@ -22,6 +23,7 @@
 <message><source>Control characters or long text require Raw JSON. The original value is preserved.</source><translation>含控制字符或过长的文本请用原始 JSON 编辑。原值保持完整。</translation></message>
 <message><source>Delete</source><translation>删除</translation></message>
 <message><source>Discard</source><translation>放弃</translation></message>
+<message><source>Document remains unsaved.</source><translation>文档仍未保存。</translation></message>
 <message><source>Duplicate</source><translation>复制节点</translation></message>
 <message><source>Duplicate object key: %1</source><translation>重复的对象键：%1</translation></message>
 <message><source>Edit</source><translation>编辑</translation></message>
@@ -73,6 +75,7 @@ MIT 许可证。动态链接 Qt。</translation></message>
 <message><source>New</source><translation>新建</translation></message>
 <message><source>Next Match</source><translation>下一个匹配</translation></message>
 <message><source>No pending draft</source><translation>无待应用草稿</translation></message>
+<message><source>No previous version was available; the new target may already exist.</source><translation>此目标没有可恢复的旧版本；新文件可能已经存在。</translation></message>
 <message><source>No unsaved changes</source><translation>无未保存修改</translation></message>
 <message><source>Number</source><translation>数字</translation></message>
 <message><source>Object</source><translation>对象</translation></message>
@@ -103,6 +106,7 @@ MIT 许可证。动态链接 Qt。</translation></message>
 <message><source>Symbolic-link targets are not supported.</source><translation>不支持保存到符号链接目标。</translation></message>
 <message><source>System error %1: %2</source><translation>系统错误 %1：%2</translation></message>
 <message><source>Tabs</source><translation>制表符</translation></message>
+<message><source>Target file: %1</source><translation>实际目标文件：%1</translation></message>
 <message><source>The JSON root must be an object.</source><translation>JSON 根必须是对象。</translation></message>
 <message><source>The bundled language resource could not be loaded.</source><translation>无法加载随附语言资源。</translation></message>
 <message><source>The commit may already have occurred; inspect the target before retrying.</source><translation>提交可能已经发生；重试前请检查目标文件。</translation></message>

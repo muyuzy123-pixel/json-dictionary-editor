@@ -53,7 +53,7 @@ install(FILES ../../LICENSE DESTINATION share/doc/json-dictionary-editor RENAME 
 install(FILES ../README.md ../../windows/resources/SampleDictionary.json DESTINATION share/doc/json-dictionary-editor)
 add_executable(jsondict_metadata_race_tests ../tests/metadata_race_tests.cpp)
 target_link_libraries(jsondict_metadata_race_tests PRIVATE jsondict_files)
-foreach(case target_xattr_before_rename temporary_xattr_before_rename target_xattr_at_commit temporary_xattr_at_commit target_xattr_change_at_commit temporary_xattr_change_at_commit target_acl_at_commit temporary_acl_at_commit target_xattr_after_commit backup_acl_after_commit default_acl_temporary)
+foreach(case target_xattr_before_rename temporary_xattr_before_rename target_xattr_at_commit temporary_xattr_at_commit target_xattr_change_at_commit temporary_xattr_change_at_commit target_acl_at_commit temporary_acl_at_commit target_xattr_after_commit backup_acl_after_commit default_acl_temporary target_xattr_process_at_commit target_acl_process_at_commit)
  add_test(NAME linux_metadata_${case} COMMAND jsondict_metadata_race_tests ${case})
  set_tests_properties(linux_metadata_${case} PROPERTIES SKIP_RETURN_CODE 77)
 endforeach()

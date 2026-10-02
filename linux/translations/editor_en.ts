@@ -8,6 +8,7 @@
 <message><source>%1 matches</source><translation>%1 matches</translation></message>
 <message><source>%1 nodes · %2</source><translation>%1 nodes · %2</translation></message>
 <message><source>A competing version was replaced; the recovery copy is retained. The document remains unsaved.</source><translation>A competing version was replaced; the recovery copy is retained. The document remains unsaved.</translation></message>
+<message><source>A previous save to this target had an uncertain commit. Reopen and inspect it, or save to a different file.</source><translation>A previous save to this target had an uncertain commit. Reopen and inspect it, or save to a different file.</translation></message>
 <message><source>About</source><translation>About</translation></message>
 <message><source>Add</source><translation>Add</translation></message>
 <message><source>Apply</source><translation>Apply</translation></message>
@@ -22,6 +23,7 @@
 <message><source>Control characters or long text require Raw JSON. The original value is preserved.</source><translation>Control characters or long text require Raw JSON. The original value is preserved.</translation></message>
 <message><source>Delete</source><translation>Delete</translation></message>
 <message><source>Discard</source><translation>Discard</translation></message>
+<message><source>Document remains unsaved.</source><translation>Document remains unsaved.</translation></message>
 <message><source>Duplicate</source><translation>Duplicate</translation></message>
 <message><source>Duplicate object key: %1</source><translation>Duplicate object key: %1</translation></message>
 <message><source>Edit</source><translation>Edit</translation></message>
@@ -73,6 +75,7 @@ MIT License. Qt is dynamically linked.</translation></message>
 <message><source>New</source><translation>New</translation></message>
 <message><source>Next Match</source><translation>Next Match</translation></message>
 <message><source>No pending draft</source><translation>No pending draft</translation></message>
+<message><source>No previous version was available; the new target may already exist.</source><translation>No previous version was available; the new target may already exist.</translation></message>
 <message><source>No unsaved changes</source><translation>No unsaved changes</translation></message>
 <message><source>Number</source><translation>Number</translation></message>
 <message><source>Object</source><translation>Object</translation></message>
@@ -103,6 +106,7 @@ MIT License. Qt is dynamically linked.</translation></message>
 <message><source>Symbolic-link targets are not supported.</source><translation>Symbolic-link targets are not supported.</translation></message>
 <message><source>System error %1: %2</source><translation>System error %1: %2</translation></message>
 <message><source>Tabs</source><translation>Tabs</translation></message>
+<message><source>Target file: %1</source><translation>Target file: %1</translation></message>
 <message><source>The JSON root must be an object.</source><translation>The JSON root must be an object.</translation></message>
 <message><source>The bundled language resource could not be loaded.</source><translation>The bundled language resource could not be loaded.</translation></message>
 <message><source>The commit may already have occurred; inspect the target before retrying.</source><translation>The commit may already have occurred; inspect the target before retrying.</translation></message>

@@ -52,6 +52,18 @@ FileStamp stamp_from(const struct stat& stat, const QByteArray& bytes) {
         static_cast<unsigned int>(stat.st_nlink), static_cast<unsigned int>(stat.st_gid),
         QCryptographicHash::hash(bytes, QCryptographicHash::Sha256)};
 }
+bool has_extended_attributes(int fd) {
+    ssize_t size;
+    do { size = ::flistxattr(fd, nullptr, 0); } while (size < 0 && errno == EINTR);
+    if (size < 0 && (errno == ENOTSUP || errno == EOPNOTSUPP)) return false;
+    if (size < 0) throw FileError(FileFailure::IO, QStringLiteral("Inspect extended attributes"), errno);
+    return size > 0;
+}
+void require_plain_metadata(const FileSnapshot& snapshot) {
+    if (snapshot.stamp.extended_attributes)
+        throw FileError(FileFailure::UnsupportedAtomicSave,
+            QStringLiteral("Extended attributes and ACLs require an explicitly supported metadata policy"));
+}
 std::optional<FileSnapshot> read_at(int directory, const QByteArray& basename) {
     struct stat path_before{};
     if (::fstatat(directory, basename.constData(), &path_before, AT_SYMLINK_NOFOLLOW) < 0) {
@@ -81,12 +93,15 @@ std::optional<FileSnapshot> read_at(int directory, const QByteArray& basename) {
         if (received <= 0) throw FileError(FileFailure::IO, QStringLiteral("Read file"), received < 0 ? errno : EIO);
         offset += received;
     }
+    const bool metadata = has_extended_attributes(file.get());
     if (::fstat(file.get(), &after) < 0 ||
         ::fstatat(directory, basename.constData(), &path_after, AT_SYMLINK_NOFOLLOW) < 0)
         throw FileError(FileFailure::ChangedDuringRead, QStringLiteral("File changed during reading"), errno);
     if (!stable_stat(before, after) || !stable_stat(after, path_after))
         throw FileError(FileFailure::ChangedDuringRead, QStringLiteral("File changed during reading"));
-    return FileSnapshot{bytes, stamp_from(after, bytes)};
+    auto stamp = stamp_from(after, bytes);
+    stamp.extended_attributes = metadata;
+    return FileSnapshot{bytes, std::move(stamp)};
 }
 Descriptor open_directory(const Target& target) {
     int fd = ::open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
@@ -111,14 +126,15 @@ void call_hook(const SaveOptions& options, SaveStep step) { if (options.hook) op
 bool FileStamp::operator==(const FileStamp& other) const {
     return device == other.device && inode == other.inode && size == other.size &&
         modified_seconds == other.modified_seconds && modified_nanos == other.modified_nanos &&
-        mode == other.mode && owner == other.owner && group == other.group && links == other.links && sha256 == other.sha256;
+        mode == other.mode && owner == other.owner && group == other.group && links == other.links &&
+        sha256 == other.sha256 && extended_attributes == other.extended_attributes;
 }
 FileError::FileError(FileFailure type_value, QString operation_value, int error_value,
-                     bool committed_value, QString backup_value)
+                     bool committed_value, QString backup_value, QString target_value)
     : std::runtime_error((operation_value + (error_value ?
         QStringLiteral(": ") + QString::fromLocal8Bit(std::strerror(error_value)) : QString{})).toStdString()),
       type(type_value), operation(std::move(operation_value)), system_error(error_value),
-      committed(committed_value), backup(std::move(backup_value)) {}
+      committed(committed_value), backup(std::move(backup_value)), target(std::move(target_value)) {}
 
 FileSnapshot FileStore::read(const QString& path) {
     const Target target(path);
@@ -156,15 +172,7 @@ FileStamp FileStore::save(const QString& path, const QByteArray& bytes,
         throw FileError(FileFailure::UnsupportedAtomicSave, QStringLiteral("Only user-owned targets are supported"));
     if (current && (current->stamp.mode & 07000))
         throw FileError(FileFailure::UnsupportedAtomicSave, QStringLiteral("Special file permissions are not supported"));
-    if (current) {
-        Descriptor metadata(::openat(directory.get(), target.encoded_basename.constData(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
-        if (metadata.get() < 0) throw FileError(FileFailure::IO, QStringLiteral("Inspect file metadata"), errno);
-        const auto attributes = ::flistxattr(metadata.get(), nullptr, 0);
-        if (attributes < 0 && errno != ENOTSUP)
-            throw FileError(FileFailure::IO, QStringLiteral("Inspect extended attributes"), errno);
-        if (attributes > 0)
-            throw FileError(FileFailure::UnsupportedAtomicSave, QStringLiteral("Extended attributes and ACLs require an explicitly supported metadata policy"));
-    }
+    if (current) require_plain_metadata(*current);
     const QByteArray temporary = ".jsondict-backup-" + QByteArray::number(::getpid()) + '-' +
         QByteArray::number(QRandomGenerator::system()->generate64(), 16);
     const QString backup_path = QDir(target.directory).filePath(QFile::decodeName(temporary));
@@ -198,6 +206,7 @@ FileStamp FileStore::save(const QString& path, const QByteArray& bytes,
         if (!matches(current, expected))
             throw FileError(FileFailure::Conflict, QStringLiteral("The target changed while saving"));
         const auto prepared = read_at(directory.get(), temporary);
+        if (prepared) require_plain_metadata(*prepared);
         if (!prepared || prepared->stamp.inode != static_cast<std::uint64_t>(temporary_identity.st_ino) ||
             prepared->stamp.device != static_cast<std::uint64_t>(temporary_identity.st_dev) || prepared->bytes != bytes)
             throw FileError(FileFailure::Verification, QStringLiteral("Temporary content or identity changed before commit"));
@@ -216,12 +225,14 @@ FileStamp FileStore::save(const QString& path, const QByteArray& bytes,
         if (::fsync(directory.get()) < 0)
             throw FileError(FileFailure::Durability, QStringLiteral("Flush containing directory"), errno);
         const auto installed = read_at(directory.get(), target.encoded_basename);
+        if (installed) require_plain_metadata(*installed);
         if (!installed || installed->bytes != bytes || installed->stamp.inode != prepared->stamp.inode ||
             installed->stamp.device != prepared->stamp.device || installed->stamp.mode != prepared->stamp.mode ||
             installed->stamp.owner != prepared->stamp.owner || installed->stamp.group != prepared->stamp.group || installed->stamp.links != 1)
             throw FileError(FileFailure::Verification, QStringLiteral("Saved content verification failed"));
         if (expected) {
             const auto replaced = read_at(directory.get(), temporary);
+            if (replaced) require_plain_metadata(*replaced);
             if (!replaced || !(replaced->stamp == *expected))
                 throw FileError(FileFailure::Conflict, QStringLiteral("The actual replaced file differed from the baseline"));
         }
@@ -231,10 +242,12 @@ FileStamp FileStore::save(const QString& path, const QByteArray& bytes,
             throw FileError(FileFailure::Verification, QStringLiteral("Containing directory path changed"));
         call_hook(options, SaveStep::BeforeBackupRemoval);
         const auto verified = read_at(directory.get(), target.encoded_basename);
+        if (verified) require_plain_metadata(*verified);
         if (!verified || !(verified->stamp == installed->stamp))
             throw FileError(FileFailure::Verification, QStringLiteral("The file changed after saving"));
         if (expected) {
             const auto previous = read_at(directory.get(), temporary);
+            if (previous) require_plain_metadata(*previous);
             if (!previous || !(previous->stamp == *expected))
                 throw FileError(FileFailure::Conflict, QStringLiteral("The recovery version changed after commit"));
         }
@@ -246,11 +259,11 @@ FileStamp FileStore::save(const QString& path, const QByteArray& bytes,
     } catch (const FileError& error) {
         if (!committed) ::unlinkat(directory.get(), temporary.constData(), 0);
         throw FileError(error.type, error.operation, error.system_error, committed,
-                        committed && backup_present ? backup_path : QString{});
+                        committed && backup_present ? backup_path : QString{}, QFileInfo(path).absoluteFilePath());
     } catch (const std::exception& error) {
         if (!committed) ::unlinkat(directory.get(), temporary.constData(), 0);
         throw FileError(FileFailure::IO, QString::fromUtf8(error.what()), 0, committed,
-                        committed && backup_present ? backup_path : QString{});
+                        committed && backup_present ? backup_path : QString{}, QFileInfo(path).absoluteFilePath());
     }
 }
 

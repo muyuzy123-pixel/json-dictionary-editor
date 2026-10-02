@@ -36,9 +36,13 @@ public:
  std::function<DraftDecision()> draftDecision;
  std::function<UnsavedDecision()> unsavedDecision;
  std::function<void(const QString&)> errorHandler;
+ std::function<SaveOptions(const QString&)> saveOptionsForTarget;
 private:
  void createUi();void createActions();void retranslate();void rebuild();void loadInspector();void refreshState();void updateSearch();void nextMatch(int);void changeType(int);void fail(const std::exception&);
  bool resolveUnsaved();bool save(bool saveAs=false);void open();void closeEvent(QCloseEvent*)override;
+ InspectorDraft inspectorDraft() const;
+ std::optional<DraftDecision> savingDraftDecision_;
+ QMap<QString,QString> uncertainTargets_;
  EditorSession session_;LanguageService& languages_;QString path_;std::optional<FileStamp> baseline_;TreeModel* model_;QTreeView* tree_;
  QLineEdit *key_,*search_;QPlainTextEdit* value_;QComboBox* type_;QCheckBox* boolean_;
  QLabel *pathLabel_,*keyLabel_,*typeLabel_,*valueLabel_,*notice_,*draftLabel_,*matchesLabel_;

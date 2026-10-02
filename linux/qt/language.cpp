@@ -75,11 +75,15 @@ QString errorText(const std::exception& error) {
             case FileFailure::NotRegular: text = ui("The target must be a regular file."); break;
             case FileFailure::ChangedDuringRead: text = ui("The file changed while it was being read. Retry."); break;
             case FileFailure::TooLarge: text = ui("The file exceeds the 16 MiB editor limit."); break;
-            case FileFailure::Verification: text = ui("Saved content could not be verified. The document remains unsaved."); break;
+            case FileFailure::Verification: text = file->operation == QStringLiteral("Uncertain previous save")
+                ? ui("A previous save to this target had an uncertain commit. Reopen and inspect it, or save to a different file.")
+                : ui("Saved content could not be verified. The document remains unsaved."); break;
             case FileFailure::Durability: text = ui("The file or directory could not be flushed. Durability is not confirmed."); break;
             case FileFailure::IO: text = ui("File operation failed."); break;
         }
-        if (file->committed) text += "\n" + ui("The commit may already have occurred; inspect the target before retrying.");
+        if (file->committed) text += "\n" + ui("Document remains unsaved.") + "\n" + ui("The commit may already have occurred; inspect the target before retrying.");
+        if (!file->target.isEmpty()) text += "\n" + ui("Target file: %1").arg(file->target);
+        if (file->committed && file->backup.isEmpty()) text += "\n" + ui("No previous version was available; the new target may already exist.");
         if (!file->backup.isEmpty()) text += "\n" + ui("Retained previous version: %1").arg(file->backup);
         if (file->system_error) text += "\n" + ui("System error %1: %2").arg(
             QString::number(file->system_error), QString::fromLocal8Bit(std::strerror(file->system_error)));
