@@ -15,12 +15,11 @@ env=dict(os.environ,QT_QPA_PLATFORM='offscreen')
 subprocess.run(['ctest','--test-dir',str(build),'--output-on-failure'],env=env,check=True)
 subprocess.run([str(build/'qt/json-dictionary-editor'),'--smoke-test'],env=env,check=True)
 with tempfile.TemporaryDirectory(prefix='jde-deb-',dir=out) as temp:
- stage=Path(temp)/'root';stage.mkdir()
+ work=Path(temp);stage=work/'debian/json-dictionary-editor';stage.mkdir(parents=True)
  subprocess.run(['cmake','--install',str(build),'--prefix','/usr'],env=dict(os.environ,DESTDIR=str(stage)),check=True)
  binary=stage/'usr/bin/json-dictionary-editor'
  documentation=stage/'usr/share/doc/json-dictionary-editor'
  (documentation/'build-info.json').write_text(json.dumps({'source_commit':head,'target':'Ubuntu 24.04 amd64','binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'qt':'dynamic system Qt 6.4+','third_party_libraries_bundled':False},indent=2)+'\n')
- work=Path(temp)/'metadata';(work/'debian').mkdir(parents=True)
  (work/'debian/control').write_text('Source: json-dictionary-editor\nSection: editors\nPriority: optional\nMaintainer: JSON Dictionary Editor contributors\n\nPackage: json-dictionary-editor\nArchitecture: amd64\nDescription: Ordered JSON dictionary editor\n')
  result=subprocess.check_output(['dpkg-shlibdeps','-O','-e'+str(stage/'usr/bin/json-dictionary-editor')],cwd=work,text=True)
  depends=next(line.split('=',1)[1] for line in result.splitlines() if line.startswith('shlibs:Depends='))

@@ -7,6 +7,6 @@ Comment[zh_CN]=编辑有序 JSON 字典并保留数字原始文本
 Exec=json-dictionary-editor %f
 Icon=json-dictionary-editor
 Terminal=false
-Categories=Development;Utility;
+Categories=Utility;TextEditor;
 MimeType=application/json;
 StartupWMClass=JSONDictionaryEditor

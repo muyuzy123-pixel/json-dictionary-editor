@@ -111,3 +111,8 @@ and uses dpkg-shlibdeps plus explicit QPA/Wayland plugin dependencies. It includ
 the original icon, MIT copyright, English sample and source/binary build-info;
 no Qt libraries, test binaries or fault interposer are bundled. Package generation
 does not certify real desktop behavior or dependency installation on a clean host.
+For an install test on a host with dpkg documentation exclusions, use the
+per-invocation option --path-include=/usr/share/doc/json-dictionary-editor/*,
+without changing its global configuration. Check every installed payload byte
+and dpkg --verify output; that command can return zero while reporting missing
+files. Keep such a partial install observation separate from full acceptance.
