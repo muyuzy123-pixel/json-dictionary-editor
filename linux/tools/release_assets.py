@@ -127,6 +127,10 @@ def archive_directory(directory, destination, prefix, epoch):
 def prepare(directory):
     head = preflight()
     checks, final = automatic_checks(head)
+    print('AUTOMATIC_CHECKS_OK ' + json.dumps({
+        'ctest_groups': {k: len(v) for k, v in checks['ctest_groups'].items()},
+        'qt_test_incidents': {k: v['count'] for k, v in checks['qt_test_groups'].items()},
+        'repeated_core_tests_in_gui_group': True}))
     directory.mkdir(parents=True, exist_ok=True)
     require(not list(directory.iterdir()), 'Output directory must be empty')
     short = head[:12]
@@ -291,6 +295,7 @@ def verify(directory, report_path):
         report_path.parent.mkdir(parents=True, exist_ok=True)
         dump(report_path, report)
     print(READY)
+    print('CLOUD_RECEPTION_RECEIPT ' + json.dumps(report, ensure_ascii=False))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
