@@ -1,0 +1,52 @@
+# Linux 开源发布构建准备
+
+本轮从 `e8c49e6ada0383d20b37a1152f13f36cb0b4d676` 开始，目标为
+GitHub Actions `ubuntu-24.04` x86_64。完成状态使用：
+**Linux 发布构建就绪，真实桌面未验收**。
+
+## 构建与自动检查
+
+独立分支 `codex/linux-release-build-*` 的推送会触发
+`.github/workflows/linux-release-build.yml`；也可在该分支手动运行工作流。
+checkout 获取完整 Git 历史，核对固定提交祖先关系及允许修改的发布文件，
+使用干净的最终提交构建，不使用旧候选二进制或构建缓存。
+一次性 Ubuntu runner 通过官方软件源刷新索引并安装 CMake、编译器及 Qt 6 开发依赖。
+
+复用 `python3 linux/tools/verify_cloud.py`，先完成不依赖 Qt 的独立核心，
+再进行 GUI 构建和现有 CTest、共享样例、翻译、文件故障、元数据竞争、
+offscreen 交互及保存失败状态检查。此轮不启用 Xvfb。
+完整 CTest 清单、JUnit 和 QtTest XML 必须匹配；失败、跳过或缺项阻止资产生成。
+可选环境探测的失败退出码保留在日志中。
+
+## 待发布资产
+
+构建 job 调用 `linux/tools/release_assets.py prepare`，生成：
+
+- 完整最终提交源码归档；包含所有跟踪文件、Linux 引用的共享核心、资源和英文示例。
+- Ubuntu 24.04 x86_64 二进制归档；使用 CMake 的安装目标暂存程序、原图标、许可及示例，附运行说明和构建信息。
+- `BUILD_INFO.json`、`AUTOMATIC_CHECKS.json`、完整自动检查日志归档、`SHA256SUMS`、`RELEASE_NOTES.md`。
+
+程序动态使用系统 Qt；归档不附带 Qt 库、测试程序或故障注入库。
+源码提交、编译器/CMake/Qt 版本、runner 镜像、共享库信息及被测试程序的摘要
+记录在构建信息中。资产名称包含提交标识，不覆盖旧 `1.1.1-0linux1` 固定候选。
+本轮不生成 `.deb`；后续若新增安装包须使用新包版本。
+
+独立 receive job 在另一台一次性 runner 上下载同一工作流保存的资产。
+其预期清单摘要来自构建 job 的输出，不由下载后重新计算的值冒充预期。
+它检查所有文件摘要、归档路径、完整源码与 Git 提交的字节/模式对应关系、
+ELF x86_64 架构、运行包精确文件范围、资源及自动日志与程序的对应关系。
+云端接收结果单独保存为 `linux-cloud-reception-*` Actions artifact。
+构建或取回检查失败时，工作流失败并保留诊断日志。
+
+从 Actions 运行页面下载 `linux-release-assets-*` 即可取得资产。
+Actions 资产设置保留 90 天；本工作流只有读取仓库的权限，
+不会创建标签或 GitHub Release。公开发布需后续单独决定。
+
+## 本轮验证范围
+
+本轮执行的是自动构建检查和云端资产取回校验。真实桌面、安装卸载、
+输入法、Wayland、高 DPI、其他发行版和架构、其他文件系统、崩溃与掉电
+场景全部记为未执行，不作为本轮构建交付条件。
+原 Ubuntu 固定候选、既有验收结果及 dot 权限阻塞证据继续作为原历史记录保存。
+JSON 数字原文、顺序、Unicode 校验、对象根、容量限制、空容器搜索与英文示例
+沿用固定实现；保存层的原子操作和元数据拒绝策略保持一致。

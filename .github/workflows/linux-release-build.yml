@@ -1,0 +1,102 @@
+name: Linux release build preparation
+
+on:
+  push:
+    branches: ['codex/linux-release-build-*']
+    paths: ['linux/**', '.github/workflows/linux-release-build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: linux-release-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      manifest_sha256: ${{ steps.assets.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm runner and committed source
+        run: |
+          python3 linux/tools/release_assets.py preflight
+      - name: Install runner build dependencies
+        run: |
+          mkdir -p .build/evidence
+          sudo apt-get update 2>&1 | tee .build/evidence/apt-update.log
+          sudo apt-get install -y --no-install-recommends \
+            g++ make cmake python3 qt6-base-dev qt6-base-dev-tools \
+            qt6-tools-dev qt6-l10n-tools qt6-qpa-plugins qt6-wayland \
+            fonts-noto-cjk fonts-noto-color-emoji \
+            2>&1 | tee .build/evidence/apt-install.log
+      - name: Existing core-first automatic checks
+        run: |
+          python3 linux/tools/verify_cloud.py 2>&1 | tee .build/evidence/verify-console.log
+      - name: Prepare release assets from the tested commit
+        id: assets
+        run: |
+          python3 linux/tools/release_assets.py prepare --directory .build/release-assets
+      - name: Preserve build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-build-diagnostics-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .build/evidence/
+            .build/linux-core/Testing/
+            .build/linux-gui/Testing/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 90
+      - name: Save prepared assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-release-assets-${{ github.sha }}
+          path: .build/release-assets/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
+
+  receive:
+    name: Download and independently verify prepared assets
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: linux-release-assets-${{ github.sha }}
+          path: .build/received-assets
+      - name: Verify downloaded bytes and source correspondence
+        env:
+          EXPECTED_MANIFEST_SHA256: ${{ needs.build.outputs.manifest_sha256 }}
+        run: |
+          mkdir -p .build/reception
+          python3 linux/tools/release_assets.py verify \
+            --directory .build/received-assets \
+            --report .build/reception/RECEPTION.json \
+            2>&1 | tee .build/reception/verify.log
+          sha256sum .build/reception/RECEPTION.json .build/reception/verify.log \
+            > .build/reception/SHA256SUMS-reception
+          printf '%s\n' 'Linux 发布构建就绪，真实桌面未验收' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve cloud reception result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-cloud-reception-${{ github.sha }}-${{ github.run_attempt }}
+          path: .build/reception/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90

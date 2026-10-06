@@ -1,5 +1,10 @@
 # Linux cloud build: Ubuntu 24.04 x86_64
 
+Current open-source release-build preparation uses GitHub Actions and an independent
+cloud asset-download job. See [RELEASE_BUILD.md](RELEASE_BUILD.md). Real desktop and
+installation acceptance are not delivery gates for that build round. The earlier
+fixed-candidate workflow and its limitations below remain historical context.
+
 Full fixed base: 7ee1c5bb722f9041cd2ba513de044ea1a01cf0c5.
 Parent: c60b61622d5e3767cc2f972eec67a29c57f3a60e.
 Development branch: codex/linux-cloud-20261002.
