@@ -24,12 +24,14 @@ NOT_RUN = ['real_desktop', 'installation_and_uninstallation', 'input_method',
            'Wayland', 'high_DPI', 'other_distributions_and_architectures',
            'AppImage', 'other_filesystems', 'crash_and_power_loss_durability']
 READY = 'Linux 发布构建就绪，真实桌面未验收'
+RUNTIME_PACKAGES = ('libqt6widgets6t64', 'qt6-qpa-plugins')
 RUNTIME_FILES = {
     'bin/json-dictionary-editor',
     'share/icons/hicolor/256x256/apps/json-dictionary-editor.png',
     'share/applications/json-dictionary-editor.desktop',
     'share/doc/json-dictionary-editor/copyright',
     'share/doc/json-dictionary-editor/README.md',
+    'share/doc/json-dictionary-editor/RELEASE_BUILD.md',
     'share/doc/json-dictionary-editor/SampleDictionary.json',
     'BUILD_INFO.json', 'RUNNING.txt',
 }
@@ -147,6 +149,18 @@ def prepare(directory):
     require(binary_sha == final['binary_sha256'], 'Binary changed after automatic checks')
     ldd = command(['ldd', str(binary)]).decode()
     require('not found' not in ldd, 'Unresolved runtime dependency')
+    package_rows = command(['dpkg-query', '-W',
+                            '-f=${binary:Package}\t${db:Status-Status}\t${Version}\n',
+                            *RUNTIME_PACKAGES]).decode().splitlines()
+    runtime_packages = {}
+    for row in package_rows:
+        package, status, version = row.split('\t')
+        package = package.split(':', 1)[0]
+        require(status == 'installed' and version and package not in runtime_packages,
+                'Runtime dependency not installed: ' + package)
+        runtime_packages[package] = version
+    require(set(runtime_packages) == set(RUNTIME_PACKAGES), 'Runtime package inventory mismatch')
+    dump(ROOT / '.build/evidence/runtime-packages.json', runtime_packages)
     info = {'source_commit': head, 'fixed_candidate_base': BASE, 'target': 'Ubuntu 24.04 x86_64',
             'app_version': '1.1.1-linux-preview', 'binary_sha256': binary_sha,
             'source_archive': source_name, 'source_archive_sha256': sha((directory / source_name).read_bytes()),
@@ -156,6 +170,7 @@ def prepare(directory):
             'not_run': NOT_RUN, 'automatic_checks': 'PASS',
             'gcc': command(['g++', '--version']).decode(), 'cmake': command(['cmake', '--version']).decode(),
             'qt': command(['qmake6', '--version']).decode(), 'runtime_ldd': ldd,
+            'runtime_packages': runtime_packages,
             'os_release': Path('/etc/os-release').read_text(),
             'runner_image': {k: os.environ.get(k) for k in ('ImageOS', 'ImageVersion', 'RUNNER_OS', 'RUNNER_ARCH')},
             'workflow_run': {k: os.environ.get(k) for k in ('GITHUB_REPOSITORY', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT')},
@@ -165,10 +180,13 @@ def prepare(directory):
         stage = Path(temp)
         subprocess.run(['cmake', '--install', str(ROOT / '.build/linux-gui'), '--prefix', str(stage)],
                        cwd=ROOT, check=True)
+        shutil.copyfile(ROOT / 'linux/RELEASE_BUILD.md',
+                        stage / 'share/doc/json-dictionary-editor/RELEASE_BUILD.md')
         dump(stage / 'BUILD_INFO.json', info)
         (stage / 'RUNNING.txt').write_text(
             'Ubuntu 24.04 x86_64 build. Dynamic system Qt 6; no Qt libraries bundled.\n'
-            'Runtime packages: libqt6widgets6 and qt6-qpa-plugins, with their dependencies.\n'
+            'Runtime packages: ' + ' and '.join(RUNTIME_PACKAGES)
+            + ', resolved with their dependencies by the system package manager.\n'
             'From this directory: ./bin/json-dictionary-editor [dictionary.json]\n'
             'Real desktop, installation, IME, Wayland and high DPI: NOT RUN in this build round.\n', encoding='utf-8')
         actual = {p.relative_to(stage).as_posix() for p in stage.rglob('*') if p.is_file()}
@@ -189,6 +207,8 @@ def prepare(directory):
         '本轮未执行：真实桌面、安装卸载、输入法、Wayland、高 DPI、其他发行版与架构、'
         '其他文件系统、崩溃和掉电验收。offscreen 属于自动检查。\n\n'
         '使用者需具备 Ubuntu 的 Qt 6 Widgets 与 QPA 运行依赖；运行方法见二进制归档 RUNNING.txt。'
+        '运行包为九项文件，包含 README 相对链接引用的 RELEASE_BUILD.md。'
+        '实际运行依赖包及版本见 BUILD_INFO.json 的 runtime_packages。\n\n'
         '保存层仍拒绝不支持的属性、ACL、链接或原子操作，没有直接覆盖降级。\n\n'
         '这些是待发布资产；此工作流未创建版本标签或公开 Release。'
         '原 1.1.1-0linux1 Ubuntu 固定候选及其验收记录保留。'
@@ -269,11 +289,21 @@ def verify(directory, report_path):
         for deployed, original in {
                 'share/doc/json-dictionary-editor/copyright': 'LICENSE',
                 'share/doc/json-dictionary-editor/README.md': 'linux/README.md',
+                'share/doc/json-dictionary-editor/RELEASE_BUILD.md': 'linux/RELEASE_BUILD.md',
                 'share/doc/json-dictionary-editor/SampleDictionary.json': 'windows/resources/SampleDictionary.json',
                 'share/icons/hicolor/256x256/apps/json-dictionary-editor.png': 'linux/resources/json-dictionary-editor.png',
                 'share/applications/json-dictionary-editor.desktop': 'linux/packaging/json-dictionary-editor.desktop'}.items():
             require(runtime[deployed][0] == expected[original][0], 'Runtime resource differs: ' + deployed)
+        readme = runtime['share/doc/json-dictionary-editor/README.md'][0].decode('utf-8')
+        require('[RELEASE_BUILD.md](RELEASE_BUILD.md)' in readme,
+                'Expected packaged README documentation link missing')
+        running = runtime['RUNNING.txt'][0].decode('utf-8')
+        require('Runtime packages: ' + ' and '.join(RUNTIME_PACKAGES) + ',' in running and
+                set(info['runtime_packages']) == set(RUNTIME_PACKAGES) and
+                all(info['runtime_packages'].values()), 'Runtime dependency documentation mismatch')
         evidence = archive_files(directory / info['checks_archive'], info['checks_prefix'])
+        require(json.loads(evidence['runtime-packages.json'][0]) == info['runtime_packages'],
+                'Runtime package documentation differs from runner package registration')
         require(json.loads(evidence['verified/source-final.json'][0])['binary_sha256'] == info['binary_sha256'],
                 'Evidence belongs to a different tested binary')
         for kind in ('core', 'gui'):
@@ -287,6 +317,7 @@ def verify(directory, report_path):
         report.update(result='PASS', completion_state=READY, source_commit=head,
                       expected_manifest_sha256=expected_manifest, assets=assets,
                       source_files=len(source), runtime_files=sorted(runtime),
+                      runtime_packages=info['runtime_packages'],
                       binary_sha256=info['binary_sha256'], ctest_groups=checks['ctest_groups'])
     except Exception as error:
         report['error'] = str(error)

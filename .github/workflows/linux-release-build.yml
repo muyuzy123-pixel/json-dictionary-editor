@@ -6,6 +6,10 @@ on:
     paths: ['linux/**', '.github/workflows/linux-release-build.yml']
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
   actions: read
@@ -79,6 +83,84 @@ jobs:
         with:
           name: linux-release-assets-${{ github.sha }}
           path: .build/received-assets
+      - name: Regression - expected pipeline failures
+        env:
+          EXPECTED_MANIFEST_SHA256: ${{ needs.build.outputs.manifest_sha256 }}
+        run: |
+          [[ ":${SHELLOPTS}:" == *:pipefail:* ]]
+          [[ "$-" == *e* ]]
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, shlex, shutil, subprocess, tempfile
+
+          root = pathlib.Path.cwd()
+          received = root / '.build/received-assets'
+          output = root / '.build/reception/expected-failures'
+          output.mkdir(parents=True)
+          records = []
+          def digest_files():
+              return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in received.iterdir()}
+          before = digest_files()
+          def run_case(name, upstream, expected_exit):
+              case = output / name
+              case.mkdir()
+              script = case / 'case.sh'
+              sentinel = case / 'unexpected-success'
+              summary = case / 'unexpected-summary'
+              script.write_text(upstream + '\n'
+                  + 'printf should-not-run > ' + shlex.quote(str(sentinel)) + '\n'
+                  + 'printf "Linux 发布构建就绪，真实桌面未验收\\n" >> "$GITHUB_STEP_SUMMARY"\n')
+              env = dict(os.environ, GITHUB_STEP_SUMMARY=str(summary))
+              p = subprocess.run(['bash', '--noprofile', '--norc', '-eo', 'pipefail', str(script)],
+                                 cwd=root, env=env, capture_output=True)
+              (case / 'stdout.log').write_bytes(p.stdout)
+              (case / 'stderr.log').write_bytes(p.stderr)
+              record = {'case': name, 'kind': 'EXPECTED_FAILURE_REGRESSION',
+                        'expected_exit': expected_exit, 'actual_exit': p.returncode,
+                        'success_sentinel_absent': not sentinel.exists(),
+                        'completion_summary_absent': not summary.exists()}
+              records.append(record)
+              if p.returncode != expected_exit or sentinel.exists() or summary.exists():
+                  raise RuntimeError('Pipeline failure propagation regression: ' + name)
+              return case
+          try:
+              run_case('upstream-exit-37',
+                  'python3 -c ' + shlex.quote('print("EXPECTED_FAILURE_STUB"); raise SystemExit(37)')
+                  + ' 2>&1 | tee ' + shlex.quote(str(output / 'upstream-exit-37/pipeline.log')), 37)
+              with tempfile.TemporaryDirectory(prefix='corrupted-assets-', dir=output) as temp:
+                  damaged = pathlib.Path(temp) / 'assets'
+                  shutil.copytree(received, damaged)
+                  binary_name = json.loads((damaged / 'BUILD_INFO.json').read_text())['binary_archive']
+                  archive = damaged / binary_name
+                  with archive.open('r+b') as stream:
+                      position = archive.stat().st_size // 2
+                      stream.seek(position)
+                      byte = stream.read(1)
+                      if not byte:
+                          raise RuntimeError('Empty corruption fixture')
+                      stream.seek(position)
+                      stream.write(bytes([byte[0] ^ 1]))
+                  failed_receipt = output / 'corrupted-archive/RECEPTION-EXPECTED-FAIL.json'
+                  upstream = ' '.join(shlex.quote(str(x)) for x in
+                      ['python3', 'linux/tools/release_assets.py', 'verify', '--directory', damaged,
+                       '--report', failed_receipt])
+                  run_case('corrupted-archive', upstream + ' 2>&1 | tee '
+                      + shlex.quote(str(output / 'corrupted-archive/pipeline.log')), 1)
+                  failed = json.loads(failed_receipt.read_text())
+                  if failed['result'] != 'FAIL' or failed.get('error') != 'Asset digest mismatch: ' + binary_name:
+                      raise RuntimeError('Corruption fixture did not exercise the intended failure')
+                  records[-1]['fail_receipt_verified'] = True
+              if before != digest_files():
+                  raise RuntimeError('Original downloaded assets changed during regression')
+              result = {'result': 'PASS', 'kind': 'EXPECTED_FAILURE_REGRESSION',
+                        'original_download_unchanged': True, 'cases': records}
+          except Exception as error:
+              result = {'result': 'FAIL', 'kind': 'EXPECTED_FAILURE_REGRESSION',
+                        'error': str(error), 'cases': records}
+              raise
+          finally:
+              (output / 'REGRESSION.json').write_text(json.dumps(result, indent=2) + '\n')
+          print('EXPECTED_FAILURE_REGRESSIONS_OK ' + json.dumps(result))
+          PY
       - name: Verify downloaded bytes and source correspondence
         env:
           EXPECTED_MANIFEST_SHA256: ${{ needs.build.outputs.manifest_sha256 }}
